@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
+import { 
+    auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged,
+    collection, doc, setDoc, updateDoc, getDoc, getDocs, addDoc, deleteDoc, onSnapshot, query, where, writeBatch
+} from "./firebase";
 
 /**
  * @license
@@ -37,6 +41,10 @@ const directoriesDB = [
 ];
 
 export default function App() {
+    // Auth State
+    const [user, setUser] = useState<any>(null);
+    const [isAuthReady, setIsAuthReady] = useState(false);
+
     // Core Data
     const [allStudents, setAllStudents] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState("all");
@@ -50,10 +58,10 @@ export default function App() {
     const [showPrintBtn, setShowPrintBtn] = useState(false);
 
     // Institution Info (Settings)
-    const [schoolName, setSchoolName] = useState("مدرسة البارودي");
-    const [academyName, setAcademyName] = useState("الأكاديمية الجهوية لجهة الرباط سلا القنيطرة");
-    const [provincialName, setProvincialName] = useState("المديرية الإقليمية: إقليم القنيطرة");
-    const [currentCity, setCurrentCity] = useState("القنيطرة");
+    const [schoolName, setSchoolName] = useState("يرجى إدخال اسم المؤسسة");
+    const [academyName, setAcademyName] = useState("الأكاديمية الجهوية");
+    const [provincialName, setProvincialName] = useState("المديرية الإقليمية");
+    const [currentCity, setCurrentCity] = useState("المدينة");
 
     // Form/Search States
     const [searchDirTerm, setSearchDirTerm] = useState("");
@@ -74,11 +82,97 @@ export default function App() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const dropZoneRef = useRef<HTMLDivElement>(null);
 
+    // Firebase Auth Listener
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (u) => {
+            if (u) {
+                setUser(u);
+                // Load User Settings
+                const userDoc = await getDoc(doc(db, "users", u.uid));
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    setSchoolName(data.schoolName || "");
+                    setAcademyName(data.academyName || "");
+                    setProvincialName(data.provincialName || "");
+                    setCurrentCity(data.currentCity || "");
+                } else {
+                    // Initialize user doc
+                    await setDoc(doc(db, "users", u.uid), {
+                        uid: u.uid,
+                        email: u.email,
+                        schoolName: "",
+                        academyName: "",
+                        provincialName: "",
+                        currentCity: ""
+                    });
+                }
+            } else {
+                setUser(null);
+            }
+            setIsAuthReady(true);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Firestore Real-time Listener for Students
+    useEffect(() => {
+        if (user) {
+            const q = query(collection(db, "students"), where("uid", "==", user.uid));
+            const unsubscribe = onSnapshot(q, (snapshot) => {
+                const studs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setAllStudents(studs);
+            }, (error) => {
+                console.error("Firestore Error:", error);
+                showToast("خطأ في جلب البيانات من السحابة", "error");
+            });
+            return () => unsubscribe();
+        } else {
+            setAllStudents([]);
+        }
+    }, [user]);
+
     useEffect(() => {
         const today = new Date().toISOString().split('T')[0];
         setCorrDate(today);
         setRequestDate(today);
     }, []);
+
+    const loginWithGoogle = async () => {
+        try {
+            await signInWithPopup(auth, googleProvider);
+            showToast("تم تسجيل الدخول بنجاح", "success");
+        } catch (error) {
+            console.error("Login Failed", error);
+            showToast("فشل تسجيل الدخول", "error");
+        }
+    };
+
+    const handleLogout = async () => {
+        try {
+            await signOut(auth);
+            showToast("تم تسجيل الخروج", "success");
+        } catch (error) {
+            showToast("خطأ في تسجيل الخروج", "error");
+        }
+    };
+
+    const saveSettings = async () => {
+        if (!user) return;
+        try {
+            await setDoc(doc(db, "users", user.uid), {
+                uid: user.uid,
+                email: user.email,
+                schoolName,
+                academyName,
+                provincialName,
+                currentCity
+            }, { merge: true });
+            showToast("تم حفظ الإعدادات بنجاح", "success");
+            setActiveView('dashboard');
+        } catch (error) {
+            showToast("خطأ في حفظ الإعدادات", "error");
+        }
+    };
 
     const showToast = (msg: string, type: string) => {
         const toast = document.createElement('div');
@@ -91,42 +185,62 @@ export default function App() {
         }, 4500);
     };
 
-    const handleUpload = (file: File) => {
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e: any) => {
-            try {
-                const data = new Uint8Array(e.target.result);
-                const wb = XLSX.read(data, { type: 'array' });
-                const ws = wb.Sheets[wb.SheetNames[0]];
-                const json: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    const handleUpload = (files: FileList | File[]) => {
+        if (!user) {
+            showToast("يرجى تسجيل الدخول أولاً لحفظ البيانات", "error");
+            return;
+        }
+        if (!files || files.length === 0) return;
+        
+        const filesArray = Array.from(files);
+        let totalProcessed = 0;
+        let batch = writeBatch(db);
+        let count = 0;
 
-                const students: any[] = [];
-                for (let i = 1; i < json.length; i++) {
-                    const row = json[i];
-                    if (row && row.length >= 3) {
-                        students.push({
-                            studentNum: String(row[0] || '').trim(),
-                            lastName: String(row[1] || '').trim(),
-                            firstName: String(row[2] || '').trim(),
-                            transferDate: String(row[3] || '').trim(),
-                            transferType: String(row[4] || '').trim(),
-                            receivingInst: String(row[5] || '').trim(),
-                            originalInst: String(row[6] || '').trim(),
-                            originalDir: String(row[7] || '').trim(),
-                            level: String(row[8] || '—').trim() // Column 9 (optional)
-                        });
+        filesArray.forEach((file) => {
+            const reader = new FileReader();
+            reader.onload = async (e: any) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const wb = XLSX.read(data, { type: 'array' });
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    const json: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+                    // تبدأ المعطيات من السطر رقم 11 (Index 10)
+                    for (let i = 10; i < json.length; i++) {
+                        const row = json[i];
+                        if (row && row.length >= 3) {
+                            const studentRef = doc(collection(db, "students"));
+                            batch.set(studentRef, {
+                                uid: user.uid,
+                                studentNum: String(row[0] || '').trim(),
+                                lastName: String(row[1] || '').trim(),
+                                firstName: String(row[2] || '').trim(),
+                                transferDate: String(row[3] || '').trim(),
+                                transferType: String(row[4] || '').trim(),
+                                receivingInst: String(row[5] || '').trim(),
+                                originalInst: String(row[6] || '').trim(),
+                                originalDir: String(row[7] || '').trim(),
+                                level: String(row[8] || '—').trim(),
+                                createdAt: new Date().toISOString()
+                            });
+                            count++;
+                        }
                     }
+                    
+                    totalProcessed++;
+                    
+                    if (totalProcessed === filesArray.length) {
+                        await batch.commit();
+                        showToast(`تم استيراد وحفظ ${count} سجل بنجاح`, 'success');
+                    }
+                } catch (err: any) {
+                    showToast(`خطأ في قراءة ملف ${file.name}`, 'error');
+                    totalProcessed++;
                 }
-                setAllStudents(students);
-                const arriving = students.filter(s => isArriving(s));
-                const departing = students.filter(s => isDeparting(s));
-                showToast(`تم استيراد ${students.length} سجل (${arriving.length} وافد + ${departing.length} مغادر)`, 'success');
-            } catch (err: any) {
-                showToast('خطأ في قراءة الملف: ' + err.message, 'error');
-            }
-        };
-        reader.readAsArrayBuffer(file);
+            };
+            reader.readAsArrayBuffer(file);
+        });
     };
 
     const isArriving = (s: any) => {
@@ -139,11 +253,20 @@ export default function App() {
         return t.includes('مغادر') || t.includes('مغادرة') || t.includes('departing');
     };
 
-    const clearData = () => {
-        if (confirm('هل أنت متأكد من مسح جميع البيانات؟')) {
-            setAllStudents([]);
-            setSelectedStudent(null);
-            showToast('تم مسح البيانات', 'success');
+    const clearData = async () => {
+        if (!user) return;
+        if (confirm('هل أنت متأكد من مسح جميع البيانات من السحابة؟')) {
+            try {
+                const batch = writeBatch(db);
+                const q = query(collection(db, "students"), where("uid", "==", user.uid));
+                const snapshot = await getDocs(q);
+                snapshot.forEach(d => batch.delete(d.ref));
+                await batch.commit();
+                setSelectedStudent(null);
+                showToast('تم مسح البيانات السحابية', 'success');
+            } catch (error) {
+                showToast("خطأ في مسح البيانات", "error");
+            }
         }
     };
 
@@ -286,11 +409,33 @@ export default function App() {
         setShowPrintBtn(true);
     };
 
-    const generateRequestFileCorr = () => {
+    const handleStudentSelect = (s: any) => {
+        setSelectedStudent(s);
+        // Load stored dates if they exist
+        setRequestDate1(s.requestDate1 || "");
+        setRequestDate2(s.requestDate2 || "");
+        setRequestDate3(s.requestDate3 || "");
+    };
+
+    const generateRequestFileCorr = async () => {
         if (!selectedStudent) {
             showToast('يرجى اختيار تلميذ أولاً!', 'error');
             return;
         }
+
+        // Save dates to Firestore first
+        try {
+            await updateDoc(doc(db, "students", selectedStudent.id), {
+                requestDate1,
+                requestDate2,
+                requestDate3
+            });
+            showToast("تم تحديث تواريخ المراسلات في السحابة", "success");
+        } catch (error) {
+            console.error("Failed to update dates", error);
+            showToast("فشل حفظ التواريخ في السحابة", "error");
+        }
+
         setModalContent(renderOfficialDoc(
             "طلب الوثائق المدرسية للتلميذ(ة):",
             "يشرفني أن أطلب منكم موافاتي بالوثائق المدرسية للتلميذ(ة)",
@@ -316,11 +461,34 @@ export default function App() {
         s.lastName.toLowerCase().includes(searchTerm.toLowerCase())
     ) : [];
 
+    const deleteStudent = async (id: string) => {
+        if (!confirm('حذف هذا التلميذ؟')) return;
+        try {
+            await deleteDoc(doc(db, "students", id));
+            showToast("تم الحذف بنجاح", "success");
+        } catch (error) {
+            showToast("خطأ في الحذف", "error");
+        }
+    };
+
     return (
         <div className="app-layout">
             {/* Sidebar */}
             <aside className="sidebar no-print">
                 <div className="sidebar-logo">📁 مدير التحويلات</div>
+                
+                {user ? (
+                    <div style={{ padding: '10px', background: 'rgba(255,255,255,0.1)', borderRadius: '10px', marginBottom: '20px', textAlign: 'center' }}>
+                        <img src={user.photoURL} alt="avatar" style={{ width: '40px', borderRadius: '50%', marginBottom: '5px' }} />
+                        <div style={{ fontSize: '0.9em', fontWeight: 700 }}>{user.displayName}</div>
+                        <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer', fontSize: '0.85em', marginTop: '5px', textDecoration: 'underline' }}>تسجيل الخروج</button>
+                    </div>
+                ) : (
+                    <button className="side-btn" onClick={loginWithGoogle} style={{ background: '#4285f4', color: 'white', marginBottom: '20px' }}>
+                        تسجيل الدخول بـ Google
+                    </button>
+                )}
+
                 <button className={`side-btn ${activeView === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveView('dashboard')}>🏠 لوحة التحكم</button>
                 <button className="side-btn" onClick={openBulkRequestModal}>📥 طلب ملف مدرسي</button>
                 <button className="side-btn" onClick={openBulkSendModal}>📤 إرسال ملف مدرسي</button>
@@ -331,7 +499,18 @@ export default function App() {
             {/* Main Content */}
             <main className="main-content">
                 <div className="container">
-                    {activeView === 'dashboard' ? (
+                    {!isAuthReady ? (
+                        <div style={{ textAlign: 'center', padding: '100px' }}>جاري التحميل...</div>
+                    ) : !user ? (
+                        <div className="card" style={{ textAlign: 'center', padding: '60px' }}>
+                            <div style={{ fontSize: '3em', marginBottom: '20px' }}>🔒</div>
+                            <h2 style={{ marginBottom: '15px' }}>يرجى تسجيل الدخول للمتابعة</h2>
+                            <p style={{ color: '#64748b', marginBottom: '30px' }}>قم بتسجيل الدخول باستخدام حساب Google لحفظ بيانات التلاميذ وإعدادات مؤسستك بشكل دائم في السحابة.</p>
+                            <button className="btn btn-primary" onClick={loginWithGoogle}>
+                                🌐 تسجيل الدخول بواسطة Google
+                            </button>
+                        </div>
+                    ) : activeView === 'dashboard' ? (
                         <>
                             {/* Header */}
                             <div className="header no-print">
@@ -342,14 +521,39 @@ export default function App() {
                             {/* Section Upload */}
                             <div className="card no-print" id="section-upload">
                                 <h2 className="card-title">📥 استيراد البيانات</h2>
+                                <div className="structure-box" style={{ marginBottom: '20px', background: '#fff9f0', borderRight: '5px solid #f2994a', padding: '15px', borderRadius: '10px' }}>
+                                    <div style={{ fontWeight: 800, color: '#92400e', marginBottom: '10px' }}>📌 ملاحظات هامة حول ملف Excel:</div>
+                                    <ul style={{ listStyle: 'none', paddingRight: '10px', fontSize: '0.95em' }}>
+                                        <li>• يبدأ جلب المعطيات تلقائياً من <strong>السطر رقم 11</strong>.</li>
+                                        <li>• ترتيب الأعمدة: 1.مسار | 2.النسب | 3.الإسم | 4.تاريخ التحويل | 5.النوع | 6.الاستقبال | 7.الأصلية | 8.المديرية | 9.المستوى</li>
+                                    </ul>
+                                </div>
                                 <div 
                                     className="upload-zone" 
                                     onClick={() => fileInputRef.current?.click()}
+                                    onDragOver={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                    }}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        if (e.dataTransfer.files) {
+                                            handleUpload(e.dataTransfer.files);
+                                        }
+                                    }}
                                 >
                                     <div className="upload-icon">📁</div>
-                                    <h3>اضغط لرفع ملف Excel</h3>
-                                    <p>الأعمدة المطلوبة: رقم مسار، النسب، الإسم، التاريخ، النوع، الاستقبال، الأصلية، المديرية، المستوى (اختياري)</p>
-                                    <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".xlsx,.xls" onChange={(e) => e.target.files && handleUpload(e.target.files[0])} />
+                                    <h3>اضغط أو اسحب عدة ملفات Excel هنا</h3>
+                                    <p>سيتم تجاهل أول 10 أسطر وجلب البيانات ابتداءً من السطر 11</p>
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef} 
+                                        style={{ display: 'none' }} 
+                                        accept=".xlsx,.xls" 
+                                        multiple 
+                                        onChange={(e) => e.target.files && handleUpload(e.target.files)} 
+                                    />
                                 </div>
                             </div>
 
@@ -386,7 +590,7 @@ export default function App() {
                                 {searchTerm && searchResults.length > 0 && !selectedStudent && (
                                     <div className="search-results-list">
                                         {searchResults.map((s, i) => (
-                                            <div key={i} className="search-result-item" onClick={() => setSelectedStudent(s)}>
+                                            <div key={i} className="search-result-item" onClick={() => handleStudentSelect(s)}>
                                                 <div className="stud-info">
                                                     <span className="name">{s.lastName} {s.firstName}</span>
                                                     <span className="massar">ماسار: {s.studentNum} | المؤسسة: {s.originalInst}</span>
@@ -429,7 +633,21 @@ export default function App() {
                                                 <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
                                             </div>
                                         </div>
-                                        <button className="btn btn-warning" style={{ marginTop: '20px', width: '100%' }} onClick={generateRequestFileCorr}>📋 توليد طلب الملف</button>
+                                        <div className="btn-group" style={{ marginTop: '20px' }}>
+                                            <button className="btn btn-warning" style={{ flex: 2 }} onClick={generateRequestFileCorr}>📋 توليد طلب الملف</button>
+                                            <button className="btn btn-primary" style={{ flex: 1 }} onClick={async () => {
+                                                try {
+                                                    await updateDoc(doc(db, "students", selectedStudent.id), {
+                                                        requestDate1,
+                                                        requestDate2,
+                                                        requestDate3
+                                                    });
+                                                    showToast("تم حفظ التواريخ بنجاح", "success");
+                                                } catch (e) {
+                                                    showToast("خطأ في الحفظ", "error");
+                                                }
+                                            }}>💾 حفظ التواريخ فقط</button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -464,7 +682,7 @@ export default function App() {
                                                         <td>{s.transferDate}</td>
                                                         <td>{s.originalInst || s.receivingInst}</td>
                                                         <td>{s.level}</td>
-                                                        <td><button className="btn-select" style={{ color: 'blue', padding: '5px' }} onClick={() => setSelectedStudent(s)}>اختر</button></td>
+                                                        <td><button className="btn-select" style={{ color: 'red', marginLeft: '10px' }} onClick={() => deleteStudent(s.id)}>حذف</button> <button className="btn-select" style={{ color: 'blue' }} onClick={() => handleStudentSelect(s)}>اختر</button></td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -499,7 +717,7 @@ export default function App() {
                                     <input value={currentCity} onChange={(e) => setCurrentCity(e.target.value)} />
                                 </div>
                             </div>
-                            <button className="btn btn-primary" style={{ marginTop: '20px' }} onClick={() => setActiveView('dashboard')}>حفظ والعودة</button>
+                            <button className="btn btn-primary" style={{ marginTop: '20px' }} onClick={saveSettings}>حفظ والعودة</button>
                         </div>
                     )}
                 </div>

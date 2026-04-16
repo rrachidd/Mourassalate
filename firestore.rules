@@ -1,24 +1,39 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
     // ===============================================================
     // Assumed Data Model
     // ===============================================================
     //
     // Collection: users
-    // Fields: userId, displayName, email, schoolName, directorate, updatedAt
+    // Document ID: {userId} (matches auth.uid)
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required)
+    //   - schoolName: string
+    //   - academyName: string
+    //   - provincialName: string
+    //   - currentCity: string
     //
     // Collection: students
-    // Fields: id, ownerId, massarNumber, lastName, firstName, transferDate, transferType, receivingSchool, originalSchool, originalDirectorate, createdAt
-    //
-    // Collection: letters
-    // Fields: id, ownerId, type, reference, date, targetEntity, subject, contentArray, createdAt
+    // Document ID: auto-generated
+    // Fields:
+    //   - uid: string (required, owner ID)
+    //   - studentNum: string (required)
+    //   - lastName: string (required)
+    //   - firstName: string (required)
+    //   - transferDate: string
+    //   - transferType: string
+    //   - receivingInst: string
+    //   - originalInst: string
+    //   - originalDir: string
+    //   - level: string
+    //   - createdAt: string
     //
     // ===============================================================
 
-    // ===============================================================
     // Helper Functions
-    // ===============================================================
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -28,66 +43,38 @@ service cloud.firestore {
     }
 
     function isDocOwner() {
-      return isAuthenticated() && request.auth.uid == resource.data.ownerId;
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
     }
-
-    function requestMatchesOwner() {
-      return isAuthenticated() && request.auth.uid == request.resource.data.ownerId;
-    }
-
-    function isValidEmail(email) {
-      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
-    }
-
-    function isValidString(val, min, max) {
-      return val is string && val.size() >= min && val.size() <= max;
-    }
-
-    // ===============================================================
-    // Domain Validators
-    // ===============================================================
 
     function isValidUser(data) {
-      return data.keys().hasAll(['userId', 'email']) &&
-             data.userId == request.auth.uid &&
-             isValidEmail(data.email);
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid == request.auth.uid &&
+             data.email is string;
     }
 
     function isValidStudent(data) {
-      return data.keys().hasAll(['massarNumber', 'lastName', 'firstName', 'ownerId']) &&
-             isValidString(data.massarNumber, 1, 50) &&
-             isValidString(data.lastName, 1, 100) &&
-             isValidString(data.firstName, 1, 100) &&
-             data.ownerId == request.auth.uid;
+      return data.keys().hasAll(['uid', 'studentNum', 'lastName', 'firstName']) &&
+             data.uid == request.auth.uid &&
+             data.studentNum is string && data.studentNum.size() < 100 &&
+             data.lastName is string && data.lastName.size() < 100 &&
+             data.firstName is string && data.firstName.size() < 100;
     }
 
-    function isValidLetter(data) {
-      return data.keys().hasAll(['type', 'reference', 'date', 'ownerId']) &&
-             data.type in ['request_file', 'bulk_list'] &&
-             data.ownerId == request.auth.uid;
-    }
-
-    // ===============================================================
-    // Rules
-    // ===============================================================
-
+    // Role-based Access (Optional, default to owner-only)
     match /users/{userId} {
       allow read: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+      allow create, update: if isOwner(userId) && isValidUser(request.resource.data);
     }
 
     match /students/{studentId} {
-      allow read: if isDocOwner();
-      allow create: if requestMatchesOwner() && isValidStudent(request.resource.data);
-      allow update: if isDocOwner() && requestMatchesOwner() && isValidStudent(request.resource.data);
-      allow delete: if isDocOwner();
-    }
-
-    match /letters/{letterId} {
-      allow read: if isDocOwner();
-      allow create: if requestMatchesOwner() && isValidLetter(request.resource.data);
-      allow update: if isDocOwner() && requestMatchesOwner() && isValidLetter(request.resource.data);
+      // Users can only read their own students
+      allow read: if isAuthenticated() && (resource == null || resource.data.uid == request.auth.uid);
+      
+      allow create: if isAuthenticated() && isValidStudent(request.resource.data);
+      
+      allow update: if isDocOwner() && isValidStudent(request.resource.data) &&
+                      request.resource.data.uid == resource.data.uid; // uid must remain same
+                      
       allow delete: if isDocOwner();
     }
   }
