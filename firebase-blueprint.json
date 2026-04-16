@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "userProfile": {
+      "title": "User Profile",
+      "description": "Information about the authenticated user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "schoolName": { "type": "string" },
+        "directorate": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email"]
+    },
+    "student": {
+      "title": "Student Transfer",
+      "description": "A record of a student transfer.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "massarNumber": { "type": "string" },
+        "lastName": { "type": "string" },
+        "firstName": { "type": "string" },
+        "transferDate": { "type": "string" },
+        "transferType": { "type": "string", "enum": ["وافد", "مغادر"] },
+        "receivingSchool": { "type": "string" },
+        "originalSchool": { "type": "string" },
+        "originalDirectorate": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["massarNumber", "lastName", "firstName", "ownerId"]
+    },
+    "letter": {
+      "title": "Generated Letter",
+      "description": "Historical record of generated correspondence.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "type": { "type": "string", "enum": ["request_file", "bulk_list"] },
+        "reference": { "type": "string" },
+        "date": { "type": "string" },
+        "targetEntity": { "type": "string" },
+        "subject": { "type": "string" },
+        "contentArray": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "reference", "date", "ownerId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "userProfile",
+      "description": "User specific configurations and profile settings."
+    },
+    "/students/{studentId}": {
+      "schema": "student",
+      "description": "Transfer records uploaded by users. Access restricted by ownerId."
+    },
+    "/letters/{letterId}": {
+      "schema": "letter",
+      "description": "Generated correspondence history. Access restricted by ownerId."
+    }
+  }
+}

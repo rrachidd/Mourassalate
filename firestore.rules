@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields: userId, displayName, email, schoolName, directorate, updatedAt
+    //
+    // Collection: students
+    // Fields: id, ownerId, massarNumber, lastName, firstName, transferDate, transferType, receivingSchool, originalSchool, originalDirectorate, createdAt
+    //
+    // Collection: letters
+    // Fields: id, ownerId, type, reference, date, targetEntity, subject, contentArray, createdAt
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.ownerId;
+    }
+
+    function requestMatchesOwner() {
+      return isAuthenticated() && request.auth.uid == request.resource.data.ownerId;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidString(val, min, max) {
+      return val is string && val.size() >= min && val.size() <= max;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['userId', 'email']) &&
+             data.userId == request.auth.uid &&
+             isValidEmail(data.email);
+    }
+
+    function isValidStudent(data) {
+      return data.keys().hasAll(['massarNumber', 'lastName', 'firstName', 'ownerId']) &&
+             isValidString(data.massarNumber, 1, 50) &&
+             isValidString(data.lastName, 1, 100) &&
+             isValidString(data.firstName, 1, 100) &&
+             data.ownerId == request.auth.uid;
+    }
+
+    function isValidLetter(data) {
+      return data.keys().hasAll(['type', 'reference', 'date', 'ownerId']) &&
+             data.type in ['request_file', 'bulk_list'] &&
+             data.ownerId == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+    }
+
+    match /students/{studentId} {
+      allow read: if isDocOwner();
+      allow create: if requestMatchesOwner() && isValidStudent(request.resource.data);
+      allow update: if isDocOwner() && requestMatchesOwner() && isValidStudent(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+
+    match /letters/{letterId} {
+      allow read: if isDocOwner();
+      allow create: if requestMatchesOwner() && isValidLetter(request.resource.data);
+      allow update: if isDocOwner() && requestMatchesOwner() && isValidLetter(request.resource.data);
+      allow delete: if isDocOwner();
+    }
+  }
+}
