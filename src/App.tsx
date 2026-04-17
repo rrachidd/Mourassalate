@@ -58,6 +58,7 @@ export default function App() {
     const [selectedSendStudent, setSelectedSendStudent] = useState<any>(null);
     const [searchInstTerm, setSearchInstTerm] = useState("");
     const [selectedInst, setSelectedInst] = useState<any>(null); // { name: string, dir: string }
+    const [selectedInterventionStudents, setSelectedInterventionStudents] = useState<string[]>([]);
 
     // Modal State
     const [modalOpen, setModalOpen] = useState(false);
@@ -865,11 +866,11 @@ export default function App() {
                             <p style={{ marginBottom: '20px', color: '#64748b' }}>توليد رسالة موجهة إلى السيد المدير الإقليمي للتدخل من أجل جلب ملفات التلاميذ المتعثرة.</p>
                             
                             <div className="form-group" style={{ marginBottom: '20px' }}>
-                                <label>البحث بالمؤسسة الأصلية</label>
+                                <label>البحث بالمؤسسة الأصلية أو اسم التلميذ</label>
                                 <input 
                                     type="text" 
                                     className="search-input-lg"
-                                    placeholder="ادخل اسم المؤسسة أو المديرية..."
+                                    placeholder="ادخل اسم المؤسسة، المديرية، أو اسم/مسار التلميذ..."
                                     value={searchInstTerm}
                                     onChange={(e) => {
                                         setSearchInstTerm(e.target.value);
@@ -880,10 +881,16 @@ export default function App() {
 
                             {searchInstTerm && !selectedInst && (
                                 <div className="search-results-list" style={{ marginBottom: '20px' }}>
-                                    {(Array.from(new Set(allStudents.filter(isArriving).filter(s => 
-                                        s.originalInst.toLowerCase().includes(searchInstTerm.toLowerCase()) || 
-                                        s.originalDir.toLowerCase().includes(searchInstTerm.toLowerCase())
-                                    ).map(s => `${s.originalInst}|${s.originalDir}`))) as string[]).map((key, i) => {
+                                    {(Array.from(new Set(allStudents.filter(isArriving).filter(s => {
+                                        const term = searchInstTerm.toLowerCase();
+                                        return s.originalInst.toLowerCase().includes(term) || 
+                                               s.originalDir.toLowerCase().includes(term) ||
+                                               s.lastName.toLowerCase().includes(term) ||
+                                               s.firstName.toLowerCase().includes(term) ||
+                                               `${s.firstName} ${s.lastName}`.toLowerCase().includes(term) ||
+                                               `${s.lastName} ${s.firstName}`.toLowerCase().includes(term) ||
+                                               s.studentNum.toLowerCase().includes(term);
+                                    }).map(s => `${s.originalInst}|${s.originalDir}`))) as string[]).map((key, i) => {
                                         const [inst, dir] = key.split('|');
                                         return (
                                             <div key={i} className="search-result-item" onClick={() => setSelectedInst({ name: inst, dir })}>
@@ -909,6 +916,23 @@ export default function App() {
                                         <table>
                                             <thead>
                                                 <tr>
+                                                    <th style={{ width: '40px', textAlign: 'center' }}>
+                                                        <input 
+                                                            type="checkbox"
+                                                            checked={
+                                                                allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir).length > 0 && 
+                                                                selectedInterventionStudents.length === allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir).length
+                                                            }
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    const allIds = allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir).map(s => s.id);
+                                                                    setSelectedInterventionStudents(allIds);
+                                                                } else {
+                                                                    setSelectedInterventionStudents([]);
+                                                                }
+                                                            }}
+                                                        />
+                                                    </th>
                                                     <th>مسار</th>
                                                     <th>الاسم والنسب</th>
                                                     <th>المستوى</th>
@@ -916,7 +940,20 @@ export default function App() {
                                             </thead>
                                             <tbody>
                                                 {allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir).map((s, i) => (
-                                                    <tr key={i}>
+                                                    <tr key={i} onClick={() => {
+                                                        if (selectedInterventionStudents.includes(s.id)) {
+                                                            setSelectedInterventionStudents(selectedInterventionStudents.filter(id => id !== s.id));
+                                                        } else {
+                                                            setSelectedInterventionStudents([...selectedInterventionStudents, s.id]);
+                                                        }
+                                                    }} style={{ cursor: 'pointer', background: selectedInterventionStudents.includes(s.id) ? '#f0fdf4' : 'transparent' }}>
+                                                        <td style={{ textAlign: 'center' }}>
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={selectedInterventionStudents.includes(s.id)} 
+                                                                onChange={() => {}} // Controlled by row click
+                                                            />
+                                                        </td>
                                                         <td>{s.studentNum}</td>
                                                         <td>{s.lastName} {s.firstName}</td>
                                                         <td>{s.level}</td>
@@ -937,8 +974,8 @@ export default function App() {
                                         </div>
                                     </div>
 
-                                    <div className="form-grid" style={{ marginBottom: '20px', padding: '15px', background: '#fff1f2', borderRadius: '10px', border: '1px solid #fecaca' }}>
-                                        <div className="form-group" style={{ gridColumn: 'span 3', fontWeight: 'bold', fontSize: '0.9em', color: '#9f1239', marginBottom: '5px' }}>تذكير بالاتصالات السابقة (المراسلات التي تمت):</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', padding: '15px', background: '#fff1f2', borderRadius: '10px', border: '1px solid #fecaca' }}>
+                                        <div className="form-group" style={{ fontWeight: 'bold', fontSize: '0.9em', color: '#9f1239', marginBottom: '5px' }}>تذكير بالاتصالات السابقة (المراسلات التي تمت):</div>
                                         <div className="form-group">
                                             <label>تاريخ المراسلة رقم 1</label>
                                             <input type="date" value={requestDate1} onChange={(e) => setRequestDate1(e.target.value)} />
@@ -955,10 +992,17 @@ export default function App() {
 
                                     <button className="btn btn-danger" style={{ width: '100%' }} onClick={() => {
                                         const students = allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir);
+                                        const selectedSts = students.filter(s => selectedInterventionStudents.includes(s.id));
+                                        
+                                        if (selectedSts.length === 0) {
+                                            showToast("المرجو تحديد تلميذ واحد على الأقل", "error");
+                                            return;
+                                        }
+
                                         setModalContent(renderOfficialDoc(
-                                            "طلب تدخل المدير الإقليمي قصد توصل ملفات التلاميذ",
+                                            "طلب تدخل المدير الإقليمي قصد التوصل بملفات التلاميذ",
                                             "لأجله، يشرفني أن ألتمس منكم التدخل لدى المؤسسة المعنية من أجل موافاتنا بالملفات المدرسية للتلاميذ:",
-                                            students,
+                                            selectedSts,
                                             selectedInst.name,
                                             selectedInst.dir,
                                             corrRef || "..../....",
