@@ -268,6 +268,26 @@ export default function App() {
                                 originalAcademy = String(row[8] || '').trim();
                             }
 
+                            const extractLevel = (r: any[]) => {
+                                for (let j = 5; j < Math.max(r.length, 15); j++) {
+                                    let val = String(r[j] || '').trim();
+                                    if (/(أولى|ثانية|ثالثة|رابعة|خامسة|سادسة|إعدادي|ابتدائي|تأهيلي|جذع|بكالوريا|سنة)/i.test(val)) {
+                                        let clean = val.replace(/(\s*-\s*\d+\/\d+|\s*عام|\s*مسار دولي.*|\s*خيار.*)/g, '').trim();
+                                        if (clean.includes("أولى") && clean.includes("إعدادي")) return "السنة الأولى إعدادي";
+                                        if (clean.includes("ثانية") && clean.includes("إعدادي")) return "السنة الثانية إعدادي";
+                                        if (clean.includes("ثالثة") && clean.includes("إعدادي")) return "السنة الثالثة إعدادي";
+                                        return clean;
+                                    }
+                                }
+                                for (let j = 5; j < Math.max(r.length, 15); j++) {
+                                    let val = String(r[j] || '').trim().toUpperCase();
+                                    if (val.includes('1APIC')) return "السنة الأولى إعدادي";
+                                    if (val.includes('2APIC')) return "السنة الثانية إعدادي";
+                                    if (val.includes('3APIC')) return "السنة الثالثة إعدادي";
+                                }
+                                return String(r[9] || '—').trim();
+                            };
+
                             batch.set(studentRef, {
                                 uid: user.uid,
                                 studentNum: String(row[0] || '').trim(),
@@ -279,7 +299,7 @@ export default function App() {
                                 receivingInst, 
                                 originalDir, 
                                 originalAcademy,
-                                level: String(row[9] || '—').trim(), 
+                                level: extractLevel(row), 
                                 createdAt: new Date().toISOString()
                             });
                             count++;
@@ -436,12 +456,12 @@ export default function App() {
 
                 {(reminders && reminders.some(r => r)) && (
                     <div className="doc-reminders" style={{ marginTop: '20px', borderTop: '1px dashed #000', paddingTop: '10px' }}>
-                        <div style={{ fontWeight: 800, marginBottom: '5px' }}>تذكير بالمراسلة/المراسلات السابقة:</div>
-                        <ul style={{ listStyle: 'none', paddingRight: '20px' }}>
-                            {reminders[0] && <li>- المراسلة الأولى بتاريخ: {reminders[0]}</li>}
-                            {reminders[1] && <li>- المراسلة الثانية بتاريخ: {reminders[1]}</li>}
-                            {reminders[2] && <li>- المراسلة الثالثة بتاريخ: {reminders[2]}</li>}
-                        </ul>
+                        <div style={{ fontWeight: 800, marginBottom: '8px' }}>تذكير بالمراسلة/المراسلات السابقة:</div>
+                        <div style={{ paddingRight: '20px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {reminders[0] && <div style={{ display: 'block' }}>- المراسلة الأولى بتاريخ: <strong>{reminders[0]}</strong></div>}
+                            {reminders[1] && <div style={{ display: 'block' }}>- المراسلة الثانية بتاريخ: <strong>{reminders[1]}</strong></div>}
+                            {reminders[2] && <div style={{ display: 'block' }}>- المراسلة الثالثة بتاريخ: <strong>{reminders[2]}</strong></div>}
+                        </div>
                     </div>
                 )}
 
@@ -764,8 +784,8 @@ export default function App() {
                                         </div>
                                     </div>
 
-                                    <div className="form-grid" style={{ marginBottom: '20px', padding: '15px', background: '#fff9f0', borderRadius: '10px', border: '1px solid #ffedd5' }}>
-                                        <div className="form-group" style={{ gridColumn: 'span 3', fontWeight: 'bold', fontSize: '0.9em', color: '#9a3412', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (التي تمت):</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', padding: '15px', background: '#fff9f0', borderRadius: '10px', border: '1px solid #ffedd5' }}>
+                                        <div className="form-group" style={{ fontWeight: 'bold', fontSize: '0.9em', color: '#9a3412', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (التي تمت):</div>
                                         <div className="form-group">
                                             <label>تاريخ المراسلة رقم 1</label>
                                             <input type="date" value={requestDate1} onChange={(e) => setRequestDate1(e.target.value)} />
@@ -778,7 +798,7 @@ export default function App() {
                                             <label>تاريخ المراسلة رقم 3</label>
                                             <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
                                         </div>
-                                        <div className="form-group" style={{ gridColumn: 'span 3', marginTop: '10px' }}>
+                                        <div className="form-group" style={{ marginTop: '10px' }}>
                                             <button 
                                                 className="btn btn-primary" 
                                                 style={{ width: '100%', fontSize: '0.9em', padding: '8px' }} 
@@ -1116,8 +1136,8 @@ export default function App() {
                                         </div>
                                     </div>
 
-                                    <div className="form-grid" style={{ marginBottom: '20px', padding: '15px', background: '#e0f2fe', borderRadius: '10px', border: '1px solid #bae6fd' }}>
-                                        <div className="form-group" style={{ gridColumn: 'span 3', fontWeight: 'bold', fontSize: '0.9em', color: '#0369a1', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (إن وجدت):</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', padding: '15px', background: '#e0f2fe', borderRadius: '10px', border: '1px solid #bae6fd' }}>
+                                        <div className="form-group" style={{ fontWeight: 'bold', fontSize: '0.9em', color: '#0369a1', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (إن وجدت):</div>
                                         <div className="form-group">
                                             <label>تاريخ المراسلة رقم 1</label>
                                             <input type="date" value={requestDate1} onChange={(e) => setRequestDate1(e.target.value)} />
@@ -1130,7 +1150,7 @@ export default function App() {
                                             <label>تاريخ المراسلة رقم 3</label>
                                             <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
                                         </div>
-                                        <div className="form-group" style={{ gridColumn: 'span 3', marginTop: '10px' }}>
+                                        <div className="form-group" style={{ marginTop: '10px' }}>
                                             <button 
                                                 className="btn btn-primary" 
                                                 style={{ width: '100%', fontSize: '0.9em', padding: '8px' }} 
@@ -1313,8 +1333,8 @@ export default function App() {
                                                     <input type="date" value={requestDate} onChange={(e) => setRequestDate(e.target.value)} />
                                                 </div>
                                             </div>
-                                            <div className="form-grid" style={{ marginTop: '10px', padding: '10px', background: '#fff', borderRadius: '5px', border: '1px solid #ffedd5' }}>
-                                                <div className="form-group" style={{ gridColumn: 'span 3', fontWeight: 'bold', fontSize: '0.8em', color: '#9a3412', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (التي تمت):</div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px', padding: '10px', background: '#fff', borderRadius: '5px', border: '1px solid #ffedd5' }}>
+                                                <div className="form-group" style={{ fontWeight: 'bold', fontSize: '0.8em', color: '#9a3412', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (التي تمت):</div>
                                                 <div className="form-group">
                                                     <label>تاريخ المراسلة رقم 1</label>
                                                     <input type="date" value={requestDate1} onChange={(e) => setRequestDate1(e.target.value)} />
@@ -1327,7 +1347,7 @@ export default function App() {
                                                     <label>تاريخ المراسلة رقم 3</label>
                                                     <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
                                                 </div>
-                                                <div className="form-group" style={{ gridColumn: 'span 3', marginTop: '10px' }}>
+                                                <div className="form-group" style={{ marginTop: '10px' }}>
                                                     <button 
                                                         className="btn btn-primary" 
                                                         style={{ width: '100%', fontSize: '0.9em', padding: '8px' }} 
@@ -1404,8 +1424,8 @@ export default function App() {
                                                     <input type="text" placeholder="مثال: طلبكم رقم..." value={sendNotes} onChange={(e) => setSendNotes(e.target.value)} />
                                                 </div>
                                             </div>
-                                            <div className="form-grid" style={{ marginTop: '10px', padding: '10px', background: '#fff', borderRadius: '5px', border: '1px solid #bfdbfe' }}>
-                                                <div className="form-group" style={{ gridColumn: 'span 3', fontWeight: 'bold', fontSize: '0.8em', color: '#1e3a8a', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (إن وجدت):</div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px', padding: '10px', background: '#fff', borderRadius: '5px', border: '1px solid #bfdbfe' }}>
+                                                <div className="form-group" style={{ fontWeight: 'bold', fontSize: '0.8em', color: '#1e3a8a', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (إن وجدت):</div>
                                                 <div className="form-group">
                                                     <label>تاريخ المراسلة رقم 1</label>
                                                     <input type="date" value={requestDate1} onChange={(e) => setRequestDate1(e.target.value)} />
@@ -1418,7 +1438,7 @@ export default function App() {
                                                     <label>تاريخ المراسلة رقم 3</label>
                                                     <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
                                                 </div>
-                                                <div className="form-group" style={{ gridColumn: 'span 3', marginTop: '10px' }}>
+                                                <div className="form-group" style={{ marginTop: '10px' }}>
                                                     <button 
                                                         className="btn btn-primary" 
                                                         style={{ width: '100%', fontSize: '0.9em', padding: '8px' }} 
