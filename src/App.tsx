@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
+// @ts-ignore
+import html2pdf from 'html2pdf.js';
 import { 
     auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged,
     collection, doc, setDoc, updateDoc, getDoc, getDocs, addDoc, deleteDoc, onSnapshot, query, where, writeBatch
@@ -54,7 +56,7 @@ export default function App() {
     const [selectedReqStudent, setSelectedReqStudent] = useState<any>(null);
     const [selectedSendStudent, setSelectedSendStudent] = useState<any>(null);
     const [searchInstTerm, setSearchInstTerm] = useState("");
-    const [selectedInst, setSelectedInst] = useState<string | null>(null);
+    const [selectedInst, setSelectedInst] = useState<any>(null); // { name: string, dir: string }
 
     // Modal State
     const [modalOpen, setModalOpen] = useState(false);
@@ -91,6 +93,20 @@ export default function App() {
     const arrivingInputRef = useRef<HTMLInputElement>(null);
     const departingInputRef = useRef<HTMLInputElement>(null);
     const dropZoneRef = useRef<HTMLDivElement>(null);
+    const printDocRef = useRef<HTMLDivElement>(null);
+
+    const downloadPDF = () => {
+        if (!printDocRef.current) return;
+        const element = printDocRef.current;
+        const opt = {
+            margin:       0,
+            filename:     `doc_${new Date().getTime()}.pdf`,
+            image:        { type: 'jpeg' as const, quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
+            jsPDF:        { unit: 'mm' as const, format: 'a4' as const, orientation: 'portrait' as const }
+        };
+        html2pdf().set(opt).from(element).save();
+    };
 
     // Firebase Auth Listener
     useEffect(() => {
@@ -228,6 +244,29 @@ export default function App() {
                                 tType = "مغادر"; // افتراضي إذا كان غير محدد
                             }
 
+                            // تكييف جلب البيانات حسب نوع التلميذ (وافد أم مغادر)
+                            // ملفات مسار تختلف في ترتيب المؤسسة الأصلية والمستقبلة حسب نوع اللائحة
+                            let originalInst = "";
+                            let receivingInst = "";
+                            let originalDir = "";
+                            let originalAcademy = "";
+
+                            const isArr = forcedType === "وافد" || (tType.toLowerCase().includes('وافد') || tType.toLowerCase().includes('arriving'));
+
+                            if (isArr) {
+                                // ترتيب الوافدين: 6.الاستقبال | 7.الأصلية | 8.المديرية الأصلية | 9.الأكاديمية الأصلية
+                                receivingInst = String(row[5] || '').trim();
+                                originalInst = String(row[6] || '').trim();
+                                originalDir = String(row[7] || '').trim();
+                                originalAcademy = String(row[8] || '').trim();
+                            } else {
+                                // ترتيب المغادرين: 6.الأصلية | 7.الاستقبال | 8.المديرية المستقبلة | 9.الأكاديمية المستقبلة
+                                originalInst = String(row[5] || '').trim();
+                                receivingInst = String(row[6] || '').trim();
+                                originalDir = String(row[7] || '').trim();
+                                originalAcademy = String(row[8] || '').trim();
+                            }
+
                             batch.set(studentRef, {
                                 uid: user.uid,
                                 studentNum: String(row[0] || '').trim(),
@@ -235,10 +274,10 @@ export default function App() {
                                 firstName: String(row[2] || '').trim(),
                                 transferDate: String(row[3] || '').trim(),
                                 transferType: tType,
-                                originalInst: String(row[5] || '').trim(), 
-                                receivingInst: String(row[6] || '').trim(), 
-                                originalDir: String(row[7] || '').trim(), 
-                                originalAcademy: String(row[8] || '').trim(),
+                                originalInst, 
+                                receivingInst, 
+                                originalDir, 
+                                originalAcademy,
                                 level: String(row[9] || '—').trim(), 
                                 createdAt: new Date().toISOString()
                             });
@@ -262,12 +301,12 @@ export default function App() {
     };
 
     const isArriving = (s: any) => {
-        const t = s.transferType.toLowerCase().trim();
+        const t = (s.transferType || '').toLowerCase().trim();
         return t.includes('وافد') || t.includes('وافدة') || t.includes('arriving') || t === '';
     };
 
     const isDeparting = (s: any) => {
-        const t = s.transferType.toLowerCase().trim();
+        const t = (s.transferType || '').toLowerCase().trim();
         return t.includes('مغادر') || t.includes('مغادرة') || t.includes('departing');
     };
 
@@ -326,16 +365,21 @@ export default function App() {
 
         return (
             <div className="official-doc">
-                <div className="doc-header-top">
-                    <div className="ministry-info" style={{ textAlign: 'right' }}>
-                        المملكة المغربية<br />
-                        وزارة التربية الوطنية والتعليم الأولي والرياضة<br />
+                <div className="ministry-logo-center" style={{ textAlign: 'center', marginBottom: '10px' }}>
+                    <img 
+                        src="https://raw.githubusercontent.com/m-mouhait/Maroc-Logo/master/MEN.png" 
+                        alt="وزارة التربية الوطنية" 
+                        style={{ height: '140px', width: 'auto', display: 'block', margin: '0 auto' }}
+                    />
+                </div>
+                
+                <div className="doc-header-main">
+                    <div className="ministry-info-right">
                         {academyName}<br />
                         {provincialName}<br />
                         مؤسسة: {schoolName}
                     </div>
-                    <div className="doc-meta">
-                        رقم الإرسال: {ref}<br />
+                    <div className="doc-meta-left">
                         {currentCity} في: {formattedDate}
                     </div>
                 </div>
@@ -347,6 +391,9 @@ export default function App() {
                     تحت إشراف السيد(ة) المدير(ة) الإقليمي بـ: {currentCity}
                 </div>
 
+                <div className="doc-meta-inline" style={{ textAlign: 'right', fontWeight: 700, marginBottom: '5px', fontSize: '1.05em' }}>
+                    رقم الإرسال: {ref}
+                </div>
                 <div className="doc-subject">
                     الموضوع: {title}
                 </div>
@@ -417,7 +464,8 @@ export default function App() {
             "",
             corrRef || "..../....",
             corrDate,
-            "شهادة / شواهد المغادرة"
+            "شهادة / شواهد المغادرة",
+            [requestDate1, requestDate2, requestDate3]
         ));
         setModalOpen(true);
         setShowPrintBtn(true);
@@ -445,6 +493,7 @@ export default function App() {
 
     const handleRequestSelect = (s: any) => {
         setSelectedReqStudent(s);
+        setSelectedSendStudent(null); // Clear other tab selection
         setRequestSearchTerm("");
         setRequestDate1(s.requestDate1 || "");
         setRequestDate2(s.requestDate2 || "");
@@ -453,12 +502,18 @@ export default function App() {
 
     const handleSendSelect = (s: any) => {
         setSelectedSendStudent(s);
+        setSelectedReqStudent(null); // Clear other tab selection
         setSendSearchTerm("");
     };
 
     const generateRequestFileCorr = async () => {
         if (!selectedReqStudent) {
             showToast('يرجى اختيار تلميذ أولاً!', 'error');
+            return;
+        }
+
+        if (!selectedReqStudent.originalInst) {
+            showToast('خطأ: المؤسسة الأصلية غير معرفة لهذا التلميذ!', 'error');
             return;
         }
 
@@ -496,6 +551,11 @@ export default function App() {
             return;
         }
 
+        if (!selectedSendStudent.receivingInst) {
+            showToast('خطأ: مؤسسة الاستقبال غير معرفة لهذا التلميذ!', 'error');
+            return;
+        }
+
         setModalContent(renderOfficialDoc(
             "إرسال الوثائق المدرسية للتلميذ(ة):",
             "يشرفني أن أرسل إليكم الوثائق المدرسية للتلميذ(ة)",
@@ -515,15 +575,17 @@ export default function App() {
     const displayStudents = activeTab === 'all' ? allStudents : (activeTab === 'arriving' ? arrivingStuds : departingStuds);
 
     const requestSearchResults = requestSearchTerm ? arrivingStuds.filter(s =>
-        s.studentNum.toLowerCase().includes(requestSearchTerm.toLowerCase()) ||
-        s.firstName.toLowerCase().includes(requestSearchTerm.toLowerCase()) ||
-        s.lastName.toLowerCase().includes(requestSearchTerm.toLowerCase())
+        (s.studentNum || '').toLowerCase().includes(requestSearchTerm.toLowerCase()) ||
+        (s.firstName || '').toLowerCase().includes(requestSearchTerm.toLowerCase()) ||
+        (s.lastName || '').toLowerCase().includes(requestSearchTerm.toLowerCase()) ||
+        (s.originalInst || '').toLowerCase().includes(requestSearchTerm.toLowerCase())
     ) : [];
 
     const sendSearchResults = sendSearchTerm ? departingStuds.filter(s =>
-        s.studentNum.toLowerCase().includes(sendSearchTerm.toLowerCase()) ||
-        s.firstName.toLowerCase().includes(sendSearchTerm.toLowerCase()) ||
-        s.lastName.toLowerCase().includes(sendSearchTerm.toLowerCase())
+        (s.studentNum || '').toLowerCase().includes(sendSearchTerm.toLowerCase()) ||
+        (s.firstName || '').toLowerCase().includes(sendSearchTerm.toLowerCase()) ||
+        (s.lastName || '').toLowerCase().includes(sendSearchTerm.toLowerCase()) ||
+        (s.receivingInst || '').toLowerCase().includes(sendSearchTerm.toLowerCase())
     ) : [];
 
     const smartSelect = (s: any) => {
@@ -595,6 +657,12 @@ export default function App() {
                     setSearchInstTerm("");
                     setSelectedInst(null);
                 }}>📂 إرسال ملفات جماعية</button>
+                <button className={`side-btn ${activeView === 'intervention' ? 'active' : ''}`} onClick={() => {
+                    setActiveView('intervention');
+                    setSearchInstTerm("");
+                    setSelectedInst(null);
+                }}>🛡️ طلب تدخل المدير الإقليمي</button>
+                <button className={`side-btn ${activeView === 'stats' ? 'active' : ''}`} onClick={() => setActiveView('stats')}>📊 إحصائيات المراسلات</button>
                 <button className="side-btn" onClick={openBulkRequestModal}>📥 طلب ملف مدرسي</button>
                 <button className="side-btn" onClick={openBulkSendModal}>📤 إرسال ملف مدرسي</button>
                 <button className={`side-btn ${activeView === 'settings' ? 'active' : ''}`} onClick={() => setActiveView('settings')}>⚙️ الإعدادات</button>
@@ -636,24 +704,28 @@ export default function App() {
 
                             {searchInstTerm && !selectedInst && (
                                 <div className="search-results-list" style={{ marginBottom: '20px' }}>
-                                    {Array.from(new Set(allStudents.filter(isArriving).filter(s => 
-                                        s.originalInst.toLowerCase().includes(searchInstTerm.toLowerCase())
-                                    ).map(s => s.originalInst))).map((inst, i) => (
-                                        <div key={i} className="search-result-item" onClick={() => setSelectedInst(inst)}>
-                                            <div className="stud-info">
-                                                <span className="name">{inst}</span>
-                                                <span className="massar">عدد التلاميذ: {allStudents.filter(isArriving).filter(s => s.originalInst === inst).length}</span>
+                                    {(Array.from(new Set(allStudents.filter(isArriving).filter(s => 
+                                        s.originalInst.toLowerCase().includes(searchInstTerm.toLowerCase()) || 
+                                        s.originalDir.toLowerCase().includes(searchInstTerm.toLowerCase())
+                                    ).map(s => `${s.originalInst}|${s.originalDir}`))) as string[]).map((key, i) => {
+                                        const [inst, dir] = key.split('|');
+                                        return (
+                                            <div key={i} className="search-result-item" onClick={() => setSelectedInst({ name: inst, dir })}>
+                                                <div className="stud-info">
+                                                    <span className="name">{inst}</span>
+                                                    <span className="massar">المديرية: {dir} | عدد التلاميذ: {allStudents.filter(isArriving).filter(s => s.originalInst === inst && s.originalDir === dir).length}</span>
+                                                </div>
+                                                <div className="select-badge">✓ اختيار</div>
                                             </div>
-                                            <div className="select-badge">✓ اختيار</div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
 
                             {selectedInst && (
                                 <div className="selected-inst-view" style={{ background: '#f8fafc', padding: '20px', borderRadius: '15px' }}>
                                     <h3 style={{ marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        🏢 المؤسسة المختارة: {selectedInst}
+                                        🏢 {selectedInst.name} ({selectedInst.dir})
                                         <button className="btn btn-primary" style={{ padding: '8px 15px', fontSize: '0.8em' }} onClick={() => setSelectedInst(null)}>تغيير المؤسسة</button>
                                     </h3>
                                     
@@ -667,7 +739,7 @@ export default function App() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst).map((s, i) => (
+                                                {allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir).map((s, i) => (
                                                     <tr key={i}>
                                                         <td>{s.studentNum}</td>
                                                         <td>{s.lastName} {s.firstName}</td>
@@ -689,17 +761,52 @@ export default function App() {
                                         </div>
                                     </div>
 
-                                    <button className="btn btn-warning" style={{ width: '100%' }} onClick={() => {
-                                        const students = allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst);
+                                    <div className="form-grid" style={{ marginBottom: '20px', padding: '15px', background: '#fff9f0', borderRadius: '10px', border: '1px solid #ffedd5' }}>
+                                        <div className="form-group" style={{ gridColumn: 'span 3', fontWeight: 'bold', fontSize: '0.9em', color: '#9a3412', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (التي تمت):</div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة رقم 1</label>
+                                            <input type="date" value={requestDate1} onChange={(e) => setRequestDate1(e.target.value)} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة رقم 2</label>
+                                            <input type="date" value={requestDate2} onChange={(e) => setRequestDate2(e.target.value)} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة رقم 3</label>
+                                            <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
+                                        </div>
+                                    </div>
+
+                                    <button className="btn btn-warning" style={{ width: '100%' }} onClick={async () => {
+                                        const students = allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir);
+                                        
+                                        // Save dates to all students in the batch
+                                        try {
+                                            const batch = writeBatch(db);
+                                            students.forEach(s => {
+                                                batch.update(doc(db, "students", s.id), {
+                                                    requestDate1,
+                                                    requestDate2,
+                                                    requestDate3
+                                                });
+                                            });
+                                            await batch.commit();
+                                            showToast("تم تحديث تواريخ المراسلات لجميع تلاميذ المجموعة", "success");
+                                        } catch (error) {
+                                            console.error("Batch update failed", error);
+                                            showToast("فشل تحديث التواريخ للمجموعة", "error");
+                                        }
+
                                         setModalContent(renderOfficialDoc(
                                             "طلب الوثائق المدرسية (طلب جماعي)",
                                             "يشرفني أن أطلب منكم موافاتي بالوثائق المدرسية للتلاميذ المدرجة أسماؤهم أدناه",
                                             students,
-                                            selectedInst,
-                                            students[0]?.originalDir || "",
+                                            selectedInst.name,
+                                            selectedInst.dir,
                                             corrRef || "..../....",
                                             corrDate,
-                                            "شواهد المغادرة الأصلية"
+                                            "شواهد المغادرة الأصلية",
+                                            [requestDate1, requestDate2, requestDate3]
                                         ));
                                         setModalOpen(true);
                                         setShowPrintBtn(true);
@@ -708,6 +815,205 @@ export default function App() {
                                     </button>
                                 </div>
                             )}
+                        </div>
+                    ) : activeView === 'intervention' ? (
+                        <div className="card">
+                            <h2 className="card-title">🛡️ طلب تدخل المدير الإقليمي</h2>
+                            <p style={{ marginBottom: '20px', color: '#64748b' }}>توليد رسالة موجهة إلى السيد المدير الإقليمي للتدخل من أجل جلب ملفات التلاميذ المتعثرة.</p>
+                            
+                            <div className="form-group" style={{ marginBottom: '20px' }}>
+                                <label>البحث بالمؤسسة الأصلية</label>
+                                <input 
+                                    type="text" 
+                                    className="search-input-lg"
+                                    placeholder="ادخل اسم المؤسسة أو المديرية..."
+                                    value={searchInstTerm}
+                                    onChange={(e) => {
+                                        setSearchInstTerm(e.target.value);
+                                        setSelectedInst(null);
+                                    }}
+                                />
+                            </div>
+
+                            {searchInstTerm && !selectedInst && (
+                                <div className="search-results-list" style={{ marginBottom: '20px' }}>
+                                    {(Array.from(new Set(allStudents.filter(isArriving).filter(s => 
+                                        s.originalInst.toLowerCase().includes(searchInstTerm.toLowerCase()) || 
+                                        s.originalDir.toLowerCase().includes(searchInstTerm.toLowerCase())
+                                    ).map(s => `${s.originalInst}|${s.originalDir}`))) as string[]).map((key, i) => {
+                                        const [inst, dir] = key.split('|');
+                                        return (
+                                            <div key={i} className="search-result-item" onClick={() => setSelectedInst({ name: inst, dir })}>
+                                                <div className="stud-info">
+                                                    <span className="name">{inst}</span>
+                                                    <span className="massar">المديرية: {dir} | عدد التلاميذ: {allStudents.filter(isArriving).filter(s => s.originalInst === inst && s.originalDir === dir).length}</span>
+                                                </div>
+                                                <div className="select-badge">✓ اختيار</div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {selectedInst && (
+                                <div className="selected-inst-view" style={{ background: '#f8fafc', padding: '20px', borderRadius: '15px' }}>
+                                    <h3 style={{ marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        🏢 {selectedInst.name} ({selectedInst.dir})
+                                        <button className="btn btn-primary" style={{ padding: '8px 15px', fontSize: '0.8em' }} onClick={() => setSelectedInst(null)}>تغيير المؤسسة</button>
+                                    </h3>
+                                    
+                                    <div className="table-wrap" style={{ marginBottom: '20px' }}>
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>مسار</th>
+                                                    <th>الاسم والنسب</th>
+                                                    <th>المستوى</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir).map((s, i) => (
+                                                    <tr key={i}>
+                                                        <td>{s.studentNum}</td>
+                                                        <td>{s.lastName} {s.firstName}</td>
+                                                        <td>{s.level}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <div className="form-grid" style={{ marginBottom: '20px' }}>
+                                        <div className="form-group">
+                                            <label>رقم إرسالية المؤسسة (رقم المرجع)</label>
+                                            <input type="text" placeholder="رقم إرسالية طلب الملف" value={corrRef} onChange={(e) => setCorrRef(e.target.value)} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة الحالية</label>
+                                            <input type="date" value={corrDate} onChange={(e) => setCorrDate(e.target.value)} />
+                                        </div>
+                                    </div>
+
+                                    <div className="form-grid" style={{ marginBottom: '20px', padding: '15px', background: '#fff1f2', borderRadius: '10px', border: '1px solid #fecaca' }}>
+                                        <div className="form-group" style={{ gridColumn: 'span 3', fontWeight: 'bold', fontSize: '0.9em', color: '#9f1239', marginBottom: '5px' }}>تذكير بالاتصالات السابقة (المراسلات التي تمت):</div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة رقم 1</label>
+                                            <input type="date" value={requestDate1} onChange={(e) => setRequestDate1(e.target.value)} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة رقم 2</label>
+                                            <input type="date" value={requestDate2} onChange={(e) => setRequestDate2(e.target.value)} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة رقم 3</label>
+                                            <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
+                                        </div>
+                                    </div>
+
+                                    <button className="btn btn-danger" style={{ width: '100%' }} onClick={() => {
+                                        const students = allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir);
+                                        setModalContent(renderOfficialDoc(
+                                            "طلب تدخل المدير الإقليمي قصد توصل ملفات التلاميذ",
+                                            "لأجله، يشرفني أن ألتمس منكم التدخل لدى المؤسسة المعنية من أجل موافاتنا بالملفات المدرسية للتلاميذ:",
+                                            students,
+                                            selectedInst.name,
+                                            selectedInst.dir,
+                                            corrRef || "..../....",
+                                            corrDate,
+                                            "مراسلتنا رقم " + (corrRef || "...") + " بتاريخ " + (corrDate || "..."),
+                                            [requestDate1, requestDate2, requestDate3]
+                                        ));
+                                        setModalOpen(true);
+                                        setShowPrintBtn(true);
+                                    }}>
+                                        🛡️ توليد طلب تدخل المدير الإقليمي
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    ) : activeView === 'stats' ? (
+                        <div className="card">
+                            <h2 className="card-title">📊 إحصائيات طلبات الملفات المدرسية</h2>
+                            <p style={{ marginBottom: '20px', color: '#64748b' }}>نظرة شاملة حول وضعية المراسلات والطلبات للتلاميذ الوافدين.</p>
+                            
+                            <div className="stats-row">
+                                <div className="stat-card" style={{ borderBottomColor: '#1e3c72' }}>
+                                    <div className="stat-num">{allStudents.filter(isArriving).length}</div>
+                                    <div className="stat-label">إجمالي الوافدين</div>
+                                </div>
+                                <div className="stat-card" style={{ borderBottomColor: '#10b981' }}>
+                                    <div className="stat-num">{allStudents.filter(isArriving).filter(s => s.requestDate1 || s.requestDate2 || s.requestDate3).length}</div>
+                                    <div className="stat-label">تلاميذ تمت مراسلتهم</div>
+                                </div>
+                                <div className="stat-card" style={{ borderBottomColor: '#f59e0b' }}>
+                                    <div className="stat-num">{allStudents.filter(isArriving).filter(s => !s.requestDate1 && !s.requestDate2 && !s.requestDate3).length}</div>
+                                    <div className="stat-label">لم تتم مراسلتهم قط</div>
+                                </div>
+                            </div>
+
+                            <div className="tabs-nav" style={{ marginTop: '30px' }}>
+                                <button className={`tab-btn ${corrType === 'all' ? 'active' : ''}`} onClick={() => setCorrType('all')}>الكل</button>
+                                <button className={`tab-btn ${corrType === 'none' ? 'active' : ''}`} onClick={() => setCorrType('none')}>لم يراسلوا ❌</button>
+                                <button className={`tab-btn ${corrType === '1' ? 'active' : ''}`} onClick={() => setCorrType('1')}>المراسلة 1 📩</button>
+                                <button className={`tab-btn ${corrType === '2' ? 'active' : ''}`} onClick={() => setCorrType('2')}>المراسلة 2 📩</button>
+                                <button className={`tab-btn ${corrType === '3' ? 'active' : ''}`} onClick={() => setCorrType('3')}>المراسلة 3 📩</button>
+                            </div>
+
+                            <div className="table-wrap" style={{ marginTop: '20px' }}>
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>مسار</th>
+                                            <th>الاسم والنسب</th>
+                                            <th>المؤسسة الأصلية</th>
+                                            <th>المراسات</th>
+                                            <th>الإجراء</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {allStudents.filter(isArriving).filter(s => {
+                                            if (corrType === 'all') return true;
+                                            if (corrType === 'none') return !s.requestDate1 && !s.requestDate2 && !s.requestDate3;
+                                            if (corrType === '1') return s.requestDate1 && !s.requestDate2 && !s.requestDate3;
+                                            if (corrType === '2') return s.requestDate1 && s.requestDate2 && !s.requestDate3;
+                                            if (corrType === '3') return s.requestDate1 && s.requestDate2 && s.requestDate3;
+                                            return true;
+                                        }).map((s, i) => (
+                                            <tr key={i}>
+                                                <td>{s.studentNum}</td>
+                                                <td>{s.lastName} {s.firstName}</td>
+                                                <td>{s.originalInst}</td>
+                                                <td>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.85em' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <span title="مراسلة 1" style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.requestDate1 ? '#10b981' : '#e2e8f0', flexShrink: 0 }}></span>
+                                                            <span style={{ color: s.requestDate1 ? '#065f46' : '#94a3b8' }}>{s.requestDate1 || '—'}</span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <span title="مراسلة 2" style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.requestDate2 ? '#10b981' : '#e2e8f0', flexShrink: 0 }}></span>
+                                                            <span style={{ color: s.requestDate2 ? '#065f46' : '#94a3b8' }}>{s.requestDate2 || '—'}</span>
+                                                        </div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <span title="مراسلة 3" style={{ width: '8px', height: '8px', borderRadius: '50%', background: s.requestDate3 ? '#10b981' : '#e2e8f0', flexShrink: 0 }}></span>
+                                                            <span style={{ color: s.requestDate3 ? '#065f46' : '#94a3b8' }}>{s.requestDate3 || '—'}</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <button className="btn-select" onClick={() => {
+                                                        setActiveView('dashboard');
+                                                        smartSelect(s);
+                                                        setTimeout(() => {
+                                                            const el = document.getElementById('search-request-box');
+                                                            if (el) el.scrollIntoView({ behavior: 'smooth' });
+                                                        }, 100);
+                                                    }}>مراسلة</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     ) : activeView === 'mass_send' ? (
                         <div className="card">
@@ -730,24 +1036,28 @@ export default function App() {
 
                             {searchInstTerm && !selectedInst && (
                                 <div className="search-results-list" style={{ marginBottom: '20px' }}>
-                                    {Array.from(new Set(allStudents.filter(isDeparting).filter(s => 
-                                        s.receivingInst.toLowerCase().includes(searchInstTerm.toLowerCase())
-                                    ).map(s => s.receivingInst))).map((inst, i) => (
-                                        <div key={i} className="search-result-item" onClick={() => setSelectedInst(inst)}>
-                                            <div className="stud-info">
-                                                <span className="name">{inst}</span>
-                                                <span className="massar">عدد التلاميذ: {allStudents.filter(isDeparting).filter(s => s.receivingInst === inst).length}</span>
+                                    {(Array.from(new Set(allStudents.filter(isDeparting).filter(s => 
+                                        s.receivingInst.toLowerCase().includes(searchInstTerm.toLowerCase()) || 
+                                        s.originalDir.toLowerCase().includes(searchInstTerm.toLowerCase())
+                                    ).map(s => `${s.receivingInst}|${s.originalDir}`))) as string[]).map((key, i) => {
+                                        const [inst, dir] = key.split('|');
+                                        return (
+                                            <div key={i} className="search-result-item" onClick={() => setSelectedInst({ name: inst, dir })}>
+                                                <div className="stud-info">
+                                                    <span className="name">{inst}</span>
+                                                    <span className="massar">المديرية: {dir} | عدد التلاميذ: {allStudents.filter(isDeparting).filter(s => s.receivingInst === inst && s.originalDir === dir).length}</span>
+                                                </div>
+                                                <div className="select-badge">✓ اختيار</div>
                                             </div>
-                                            <div className="select-badge">✓ اختيار</div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
 
                             {selectedInst && (
                                 <div className="selected-inst-view" style={{ background: '#f8fafc', padding: '20px', borderRadius: '15px' }}>
                                     <h3 style={{ marginBottom: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        🏢 المؤسسة المختارة: {selectedInst}
+                                        🏢 {selectedInst.name} ({selectedInst.dir})
                                         <button className="btn btn-primary" style={{ padding: '8px 15px', fontSize: '0.8em' }} onClick={() => setSelectedInst(null)}>تغيير المؤسسة</button>
                                     </h3>
                                     
@@ -761,7 +1071,7 @@ export default function App() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {allStudents.filter(isDeparting).filter(s => s.receivingInst === selectedInst).map((s, i) => (
+                                                {allStudents.filter(isDeparting).filter(s => s.receivingInst === selectedInst.name && s.originalDir === selectedInst.dir).map((s, i) => (
                                                     <tr key={i}>
                                                         <td>{s.studentNum}</td>
                                                         <td>{s.lastName} {s.firstName}</td>
@@ -784,13 +1094,13 @@ export default function App() {
                                     </div>
 
                                     <button className="btn btn-warning" style={{ width: '100%' }} onClick={() => {
-                                        const students = allStudents.filter(isDeparting).filter(s => s.receivingInst === selectedInst);
+                                        const students = allStudents.filter(isDeparting).filter(s => s.receivingInst === selectedInst.name && s.originalDir === selectedInst.dir);
                                         setModalContent(renderOfficialDoc(
                                             "إرسال الوثائق المدرسية (إرسال جماعي)",
                                             "يشرفني أن أرسل إليكم الوثائق المدرسية للتلاميذ المدرجة أسماؤهم أدناه",
                                             students,
-                                            selectedInst,
-                                            students[0]?.originalDir || "",
+                                            selectedInst.name,
+                                            selectedInst.dir,
                                             corrRef || "..../....",
                                             corrDate,
                                             "طلبكم"
@@ -818,8 +1128,9 @@ export default function App() {
                                     <div style={{ fontWeight: 800, color: '#92400e', marginBottom: '10px' }}>📌 ملاحظات هامة حول ملف Excel:</div>
                                     <ul style={{ listStyle: 'none', paddingRight: '10px', fontSize: '0.95em' }}>
                                         <li>• يبدأ جلب المعطيات تلقائياً من <strong>السطر رقم 10</strong>.</li>
-                                <li>• ترتيب الأعمدة: 1.رقم التلميذ | 2.النسب | 3.الإسم | 4.تاريخ التحويل | 5.نوع التحويل | 6.المؤسسة الأصلية | 7.مؤسسة الاستقبال | 8.المديرية الأصلية | 9.الأكاديمية الأصلية | 10.المستوى</li>
-                                        <li>• اختر منطقة الاستيراد المناسبة لتصنيف التلاميذ تلقائياً (وافدون أو مغادرون).</li>
+                                        <li>• <strong>للوافيـدين:</strong> 6.مؤسسة الاستقبال | 7.المؤسسة الأصلية | 8.المديرية الأصلية | 9.الأكاديمية الأصلية</li>
+                                        <li>• <strong>للمغادرين:</strong> 6.المؤسسة الأصلية | 7.مؤسسة الاستقبال | 8.المديرية المستقبلة | 9.الأكاديمية المستقبلة</li>
+                                        <li>• اختر منطقة الاستيراد المناسبة لتصنيف التلاميذ تلقائياً.</li>
                                     </ul>
                                 </div>
 
@@ -911,8 +1222,10 @@ export default function App() {
                                             {requestSearchResults.map((s, i) => (
                                                 <div key={i} className="search-result-item" onClick={() => handleRequestSelect(s)}>
                                                     <div className="stud-info">
-                                                        <span className="name">{s.lastName} {s.firstName}</span>
-                                                        <span className="massar">ماسار: {s.studentNum} | الأصل: {s.originalInst}</span>
+                                                        <div className="name" style={{ fontWeight: 'bold', fontSize: '1.05em' }}>{s.lastName} {s.firstName}</div>
+                                                        <div className="massar" style={{ fontSize: '0.85em', color: '#666' }}>
+                                                            🆔 {s.studentNum} | 🏫 من: <span style={{ color: '#c2410c' }}>{s.originalInst}</span> ➔ إلى: <span style={{ color: '#15803d' }}>{s.receivingInst}</span>
+                                                        </div>
                                                     </div>
                                                     <div className="select-badge">✓ اختر</div>
                                                 </div>
@@ -941,17 +1254,17 @@ export default function App() {
                                                 </div>
                                             </div>
                                             <div className="form-grid" style={{ marginTop: '10px', padding: '10px', background: '#fff', borderRadius: '5px', border: '1px solid #ffedd5' }}>
-                                                <div className="form-group" style={{ gridColumn: 'span 3', fontWeight: 'bold', fontSize: '0.8em', color: '#9a3412', marginBottom: '5px' }}>تنبيهات المراسلات السابقة (إن وجدت):</div>
+                                                <div className="form-group" style={{ gridColumn: 'span 3', fontWeight: 'bold', fontSize: '0.8em', color: '#9a3412', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (التي تمت):</div>
                                                 <div className="form-group">
-                                                    <label>تاريخ 1</label>
+                                                    <label>تاريخ المراسلة رقم 1</label>
                                                     <input type="date" value={requestDate1} onChange={(e) => setRequestDate1(e.target.value)} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label>تاريخ 2</label>
+                                                    <label>تاريخ المراسلة رقم 2</label>
                                                     <input type="date" value={requestDate2} onChange={(e) => setRequestDate2(e.target.value)} />
                                                 </div>
                                                 <div className="form-group">
-                                                    <label>تاريخ 3</label>
+                                                    <label>تاريخ المراسلة رقم 3</label>
                                                     <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
                                                 </div>
                                             </div>
@@ -977,8 +1290,10 @@ export default function App() {
                                             {sendSearchResults.map((s, i) => (
                                                 <div key={i} className="search-result-item" onClick={() => handleSendSelect(s)}>
                                                     <div className="stud-info">
-                                                        <span className="name">{s.lastName} {s.firstName}</span>
-                                                        <span className="massar">ماسار: {s.studentNum} | الاستقبال: {s.receivingInst}</span>
+                                                        <div className="name" style={{ fontWeight: 'bold', fontSize: '1.05em' }}>{s.lastName} {s.firstName}</div>
+                                                        <div className="massar" style={{ fontSize: '0.85em', color: '#666' }}>
+                                                            🆔 {s.studentNum} | 🏫 من: <span style={{ color: '#c2410c' }}>{s.originalInst}</span> ➔ إلى: <span style={{ color: '#15803d' }}>{s.receivingInst}</span>
+                                                        </div>
                                                     </div>
                                                     <div className="select-badge">✓ اختر</div>
                                                 </div>
@@ -1034,8 +1349,8 @@ export default function App() {
                                                         <th>الإسم</th>
                                                         <th>تاريخ التحويل</th>
                                                         <th>نوع التحويل</th>
-                                                        <th>المؤسسة الأصلية</th>
                                                         <th>مؤسسة الإستقبال</th>
+                                                        <th>المؤسسة الأصلية</th>
                                                         <th>م. الإقليمية الأصلية</th>
                                                         <th>الأكاديمية الأصلية</th>
                                                         <th>إجراء</th>
@@ -1075,8 +1390,8 @@ export default function App() {
                                                                 <td>{s.firstName}</td>
                                                                 <td>{s.transferDate}</td>
                                                                 <td>{s.transferType}</td>
-                                                                <td>{s.originalInst}</td>
                                                                 <td>{s.receivingInst}</td>
+                                                                <td>{s.originalInst}</td>
                                                                 <td>{s.originalDir}</td>
                                                                 <td>{s.originalAcademy}</td>
                                                             </>
@@ -1151,9 +1466,14 @@ export default function App() {
                 <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                     <button className="modal-close no-print" onClick={() => setModalOpen(false)} style={{ position: 'fixed', top: '20px', left: '20px', zIndex: 1100, padding: '10px 20px', borderRadius: '10px', background: '#eb3349', color: 'white', border: 'none', cursor: 'pointer' }}>إغلاق ✕</button>
                     {showPrintBtn && (
-                        <button className="btn btn-success no-print" onClick={() => window.print()} style={{ position: 'fixed', top: '20px', left: '120px', zIndex: 1100 }}>🖨️ طباعة أو حفظ PDF</button>
+                        <div className="no-print" style={{ position: 'fixed', top: '20px', left: '120px', zIndex: 1100, display: 'flex', gap: '10px' }}>
+                            <button className="btn btn-success" onClick={() => window.print()}>🖨️ طباعة</button>
+                            <button className="btn" style={{ background: '#2563eb', color: 'white' }} onClick={downloadPDF}>📥 تحميل PDF</button>
+                        </div>
                     )}
-                    {modalContent}
+                    <div ref={printDocRef}>
+                        {modalContent}
+                    </div>
                 </div>
             </div>
         </div>

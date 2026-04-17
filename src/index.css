@@ -455,48 +455,61 @@ input:focus, select:focus, textarea:focus {
     z-index: 1001;
 }
 
-/* Official Document Design (A4 Print) */
-.official-doc {
-    width: 210mm;
-    min-height: 297mm;
-    padding: 15mm 20mm;
-    margin: 0 auto;
-    background: white;
-    box-shadow: 0 0 40px rgba(0,0,0,0.3);
-    color: #000;
-    font-family: 'Cairo', serif;
-    position: relative;
-    line-height: 1.7;
-    direction: rtl;
-}
-
-.doc-header-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-}
-
-.ministry-info {
-    text-align: center;
-    font-size: 0.9em;
-    font-weight: 800;
-}
-
-.doc-meta {
-    text-align: left;
-    margin-top: 0;
-    font-weight: 700;
-}
-
-.doc-addresses {
-    margin: 40px 0 20px 0;
-    font-weight: 800;
-    line-height: 2.2;
-    text-align: center;
-    border: 1.5px solid #eee;
-    padding: 15px;
-    border-radius: 10px;
-}
+    /* Official Document Design (A4 Print) */
+    .official-doc {
+        width: 210mm;
+        min-height: 297mm;
+        padding: 10mm 15mm;
+        margin: 0 auto;
+        background: white;
+        box-shadow: 0 0 40px rgba(0,0,0,0.3);
+        color: #000;
+        font-family: 'Cairo', serif;
+        position: relative;
+        line-height: 1.6;
+        direction: rtl;
+    }
+    
+    .ministry-logo-center {
+        text-align: center;
+        margin-bottom: 5px;
+    }
+    
+    .ministry-logo-center img {
+        height: 120px;
+        width: auto;
+        object-fit: contain;
+        display: block;
+        margin: 0 auto;
+    }
+    
+    .doc-header-main {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-top: 5px;
+        font-size: 0.95em;
+        font-weight: 700;
+    }
+    
+    .ministry-info-right {
+        text-align: center;
+        line-height: 1.4;
+    }
+    
+    .doc-meta-left {
+        text-align: left;
+    }
+    
+    .doc-addresses {
+        margin: 25px 0 15px 0;
+        font-weight: 800;
+        line-height: 2;
+        text-align: center;
+        border: 1.5px solid #000;
+        padding: 12px;
+        border-radius: 8px;
+    }
 
 .doc-subject {
     margin: 25px 0;
