@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
+import { ministryLogo } from './logo';
 import { 
     auth, db, googleProvider, signInWithPopup, signOut, onAuthStateChanged,
     collection, doc, setDoc, updateDoc, getDoc, getDocs, addDoc, deleteDoc, onSnapshot, query, where, writeBatch
@@ -367,8 +368,8 @@ export default function App() {
             <div className="official-doc">
                 <div className="ministry-logo-center" style={{ textAlign: 'center', marginBottom: '10px' }}>
                     <img 
-                        src="https://raw.githubusercontent.com/m-mouhait/Maroc-Logo/master/MEN.png" 
-                        alt="وزارة التربية الوطنية" 
+                        src={ministryLogo} 
+                        alt="وزارة التربية الوطنية والتعليم الأولي والرياضة" 
                         style={{ height: '140px', width: 'auto', display: 'block', margin: '0 auto' }}
                     />
                 </div>
