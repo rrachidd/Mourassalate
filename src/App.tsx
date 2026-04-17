@@ -366,21 +366,22 @@ export default function App() {
 
         return (
             <div className="official-doc">
-                <div className="ministry-logo-center" style={{ textAlign: 'center', marginBottom: '10px' }}>
-                    <img 
-                        src={ministryLogo} 
-                        alt="وزارة التربية الوطنية والتعليم الأولي والرياضة" 
-                        style={{ height: '140px', width: 'auto', display: 'block', margin: '0 auto' }}
-                    />
-                </div>
-                
-                <div className="doc-header-main">
-                    <div className="ministry-info-right">
-                        {academyName}<br />
-                        {provincialName}<br />
+                <div className="doc-header-main" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', width: '100%' }}>
+                    <div className="ministry-info-right" style={{ flex: 1, textAlign: 'right', lineHeight: '1.4' }}>
+                        الأكاديمية الجهوية للتربية و التكوين : {academyName.replace(/الأكاديمية الجهوية( للتربية و?\s?التكوين)?/g, '').replace(/^[\s:\-]+/, '')}<br />
+                        المديرية الإقليمية : {provincialName.replace(/المديرية الإقليمية/g, '').replace(/^[\s:\-]+/, '')}<br />
                         مؤسسة: {schoolName}
                     </div>
-                    <div className="doc-meta-left">
+
+                    <div className="ministry-logo-center" style={{ flex: 1, textAlign: 'center' }}>
+                        <img 
+                            src={ministryLogo} 
+                            alt="وزارة التربية الوطنية والتعليم الأولي والرياضة" 
+                            style={{ height: '90px', width: 'auto', display: 'inline-block' }}
+                        />
+                    </div>
+                    
+                    <div className="doc-meta-left" style={{ flex: 1, textAlign: 'left', alignSelf: 'flex-start' }}>
                         {currentCity} في: {formattedDate}
                     </div>
                 </div>
