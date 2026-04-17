@@ -566,7 +566,8 @@ export default function App() {
             selectedSendStudent.originalDir, // Dir of receiving school usually
             sendRef,
             sendDate,
-            sendNotes || "طلبكم"
+            sendNotes || "طلبكم",
+            [requestDate1, requestDate2, requestDate3]
         ));
         setModalOpen(true);
         setShowPrintBtn(true);
@@ -776,6 +777,26 @@ export default function App() {
                                         <div className="form-group">
                                             <label>تاريخ المراسلة رقم 3</label>
                                             <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
+                                        </div>
+                                        <div className="form-group" style={{ gridColumn: 'span 3', marginTop: '10px' }}>
+                                            <button 
+                                                className="btn btn-primary" 
+                                                style={{ width: '100%', fontSize: '0.9em', padding: '8px' }} 
+                                                onClick={async () => {
+                                                    const students = allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir);
+                                                    try {
+                                                        const batch = writeBatch(db);
+                                                        students.forEach(s => batch.update(doc(db, "students", s.id), { requestDate1, requestDate2, requestDate3 }));
+                                                        await batch.commit();
+                                                        showToast("تم تخزين وتحديث التواريخ بنجاح للمجموعة", "success");
+                                                    } catch (error) {
+                                                        console.error(error);
+                                                        showToast("فشل تخزين التواريخ", "error");
+                                                    }
+                                                }}
+                                            >
+                                                💾 تخزين التواريخ للمجموعة
+                                            </button>
                                         </div>
                                     </div>
 
@@ -1095,6 +1116,42 @@ export default function App() {
                                         </div>
                                     </div>
 
+                                    <div className="form-grid" style={{ marginBottom: '20px', padding: '15px', background: '#e0f2fe', borderRadius: '10px', border: '1px solid #bae6fd' }}>
+                                        <div className="form-group" style={{ gridColumn: 'span 3', fontWeight: 'bold', fontSize: '0.9em', color: '#0369a1', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (إن وجدت):</div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة رقم 1</label>
+                                            <input type="date" value={requestDate1} onChange={(e) => setRequestDate1(e.target.value)} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة رقم 2</label>
+                                            <input type="date" value={requestDate2} onChange={(e) => setRequestDate2(e.target.value)} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة رقم 3</label>
+                                            <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
+                                        </div>
+                                        <div className="form-group" style={{ gridColumn: 'span 3', marginTop: '10px' }}>
+                                            <button 
+                                                className="btn btn-primary" 
+                                                style={{ width: '100%', fontSize: '0.9em', padding: '8px' }} 
+                                                onClick={async () => {
+                                                    const students = allStudents.filter(isDeparting).filter(s => s.receivingInst === selectedInst.name && s.originalDir === selectedInst.dir);
+                                                    try {
+                                                        const batch = writeBatch(db);
+                                                        students.forEach(s => batch.update(doc(db, "students", s.id), { requestDate1, requestDate2, requestDate3 }));
+                                                        await batch.commit();
+                                                        showToast("تم تخزين وتحديث التواريخ بنجاح للمجموعة", "success");
+                                                    } catch (error) {
+                                                        console.error(error);
+                                                        showToast("فشل تخزين التواريخ", "error");
+                                                    }
+                                                }}
+                                            >
+                                                💾 تخزين التواريخ للمجموعة
+                                            </button>
+                                        </div>
+                                    </div>
+
                                     <button className="btn btn-warning" style={{ width: '100%' }} onClick={() => {
                                         const students = allStudents.filter(isDeparting).filter(s => s.receivingInst === selectedInst.name && s.originalDir === selectedInst.dir);
                                         setModalContent(renderOfficialDoc(
@@ -1105,7 +1162,8 @@ export default function App() {
                                             selectedInst.dir,
                                             corrRef || "..../....",
                                             corrDate,
-                                            "طلبكم"
+                                            "طلبكم",
+                                            [requestDate1, requestDate2, requestDate3]
                                         ));
                                         setModalOpen(true);
                                         setShowPrintBtn(true);
@@ -1269,6 +1327,25 @@ export default function App() {
                                                     <label>تاريخ المراسلة رقم 3</label>
                                                     <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
                                                 </div>
+                                                <div className="form-group" style={{ gridColumn: 'span 3', marginTop: '10px' }}>
+                                                    <button 
+                                                        className="btn btn-primary" 
+                                                        style={{ width: '100%', fontSize: '0.9em', padding: '8px' }} 
+                                                        onClick={async () => {
+                                                            try {
+                                                                await updateDoc(doc(db, "students", selectedReqStudent.id), {
+                                                                    requestDate1, requestDate2, requestDate3
+                                                                });
+                                                                showToast("تم تخزين وتحديث التواريخ بنجاح", "success");
+                                                            } catch (error) {
+                                                                console.error(error);
+                                                                showToast("فشل تخزين التواريخ", "error");
+                                                            }
+                                                        }}
+                                                    >
+                                                        💾 تخزين التواريخ في قاعدة البيانات
+                                                    </button>
+                                                </div>
                                             </div>
                                             <button className="btn btn-warning" style={{ width: '100%', marginTop: '15px' }} onClick={generateRequestFileCorr}>📋 توليد طلب الملف</button>
                                         </div>
@@ -1325,6 +1402,40 @@ export default function App() {
                                                 <div className="form-group">
                                                     <label>بناءً على</label>
                                                     <input type="text" placeholder="مثال: طلبكم رقم..." value={sendNotes} onChange={(e) => setSendNotes(e.target.value)} />
+                                                </div>
+                                            </div>
+                                            <div className="form-grid" style={{ marginTop: '10px', padding: '10px', background: '#fff', borderRadius: '5px', border: '1px solid #bfdbfe' }}>
+                                                <div className="form-group" style={{ gridColumn: 'span 3', fontWeight: 'bold', fontSize: '0.8em', color: '#1e3a8a', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (إن وجدت):</div>
+                                                <div className="form-group">
+                                                    <label>تاريخ المراسلة رقم 1</label>
+                                                    <input type="date" value={requestDate1} onChange={(e) => setRequestDate1(e.target.value)} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label>تاريخ المراسلة رقم 2</label>
+                                                    <input type="date" value={requestDate2} onChange={(e) => setRequestDate2(e.target.value)} />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label>تاريخ المراسلة رقم 3</label>
+                                                    <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
+                                                </div>
+                                                <div className="form-group" style={{ gridColumn: 'span 3', marginTop: '10px' }}>
+                                                    <button 
+                                                        className="btn btn-primary" 
+                                                        style={{ width: '100%', fontSize: '0.9em', padding: '8px' }} 
+                                                        onClick={async () => {
+                                                            try {
+                                                                await updateDoc(doc(db, "students", selectedSendStudent.id), {
+                                                                    requestDate1, requestDate2, requestDate3
+                                                                });
+                                                                showToast("تم تخزين وتحديث التواريخ بنجاح", "success");
+                                                            } catch (error) {
+                                                                console.error(error);
+                                                                showToast("فشل تخزين التواريخ", "error");
+                                                            }
+                                                        }}
+                                                    >
+                                                        💾 تخزين التواريخ في قاعدة البيانات
+                                                    </button>
                                                 </div>
                                             </div>
                                             <button className="btn btn-primary" style={{ width: '100%', marginTop: '15px' }} onClick={generateSendFileCorr}>📤 توليد إرسال ملف</button>
