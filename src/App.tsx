@@ -59,6 +59,8 @@ export default function App() {
     const [searchInstTerm, setSearchInstTerm] = useState("");
     const [selectedInst, setSelectedInst] = useState<any>(null); // { name: string, dir: string }
     const [selectedInterventionStudents, setSelectedInterventionStudents] = useState<string[]>([]);
+    const [selectedMassReqStudents, setSelectedMassReqStudents] = useState<string[]>([]);
+    const [selectedMassSendStudents, setSelectedMassSendStudents] = useState<string[]>([]);
 
     // Modal State
     const [modalOpen, setModalOpen] = useState(false);
@@ -835,7 +837,11 @@ export default function App() {
                                     ).map(s => `${s.originalInst}|${s.originalDir}`))) as string[]).map((key, i) => {
                                         const [inst, dir] = key.split('|');
                                         return (
-                                            <div key={i} className="search-result-item" onClick={() => setSelectedInst({ name: inst, dir })}>
+                                            <div key={i} className="search-result-item" onClick={() => {
+                                                setSelectedInst({ name: inst, dir });
+                                                const instStudents = allStudents.filter(isArriving).filter(s => s.originalInst === inst && s.originalDir === dir);
+                                                setSelectedMassReqStudents(instStudents.map(s => s.id));
+                                            }}>
                                                 <div className="stud-info">
                                                     <span className="name">{inst}</span>
                                                     <span className="massar">المديرية: {dir} | عدد التلاميذ: {allStudents.filter(isArriving).filter(s => s.originalInst === inst && s.originalDir === dir).length}</span>
@@ -858,6 +864,20 @@ export default function App() {
                                         <table>
                                             <thead>
                                                 <tr>
+                                                    <th style={{ width: '40px' }}>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={
+                                                                allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir).length > 0 && 
+                                                                selectedMassReqStudents.length === allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir).length
+                                                            }
+                                                            onChange={(e) => {
+                                                                const allIds = allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir).map(s => s.id);
+                                                                if (e.target.checked) setSelectedMassReqStudents(allIds);
+                                                                else setSelectedMassReqStudents([]);
+                                                            }}
+                                                        />
+                                                    </th>
                                                     <th>مسار</th>
                                                     <th>الاسم والنسب</th>
                                                     <th>المستوى</th>
@@ -865,7 +885,20 @@ export default function App() {
                                             </thead>
                                             <tbody>
                                                 {allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir).map((s, i) => (
-                                                    <tr key={i}>
+                                                    <tr key={i} onClick={() => {
+                                                        if (selectedMassReqStudents.includes(s.id)) {
+                                                            setSelectedMassReqStudents(selectedMassReqStudents.filter(id => id !== s.id));
+                                                        } else {
+                                                            setSelectedMassReqStudents([...selectedMassReqStudents, s.id]);
+                                                        }
+                                                    }} style={{ cursor: 'pointer' }}>
+                                                        <td>
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={selectedMassReqStudents.includes(s.id)} 
+                                                                onChange={() => {}} // handled by tr click
+                                                            />
+                                                        </td>
                                                         <td>{s.studentNum}</td>
                                                         <td>{s.lastName} {s.firstName}</td>
                                                         <td>{s.level}</td>
@@ -905,7 +938,11 @@ export default function App() {
                                                 className="btn btn-primary" 
                                                 style={{ width: '100%', fontSize: '0.9em', padding: '8px' }} 
                                                 onClick={async () => {
-                                                    const students = allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir);
+                                                    const students = allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir && selectedMassReqStudents.includes(s.id));
+                                                    if (students.length === 0) {
+                                                        showToast("المرجو تحديد تلميذ واحد على الأقل", "error");
+                                                        return;
+                                                    }
                                                     try {
                                                         const batch = writeBatch(db);
                                                         students.forEach(s => batch.update(doc(db, "students", s.id), { requestDate1, requestDate2, requestDate3 }));
@@ -923,8 +960,13 @@ export default function App() {
                                     </div>
 
                                     <button className="btn btn-warning" style={{ width: '100%' }} onClick={async () => {
-                                        const students = allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir);
+                                        const students = allStudents.filter(isArriving).filter(s => s.originalInst === selectedInst.name && s.originalDir === selectedInst.dir && selectedMassReqStudents.includes(s.id));
                                         
+                                        if (students.length === 0) {
+                                            showToast("المرجو تحديد تلميذ واحد على الأقل", "error");
+                                            return;
+                                        }
+
                                         // Save dates to all students in the batch
                                         try {
                                             const batch = writeBatch(db);
@@ -1227,7 +1269,11 @@ export default function App() {
                                     ).map(s => `${s.receivingInst}|${s.originalDir}`))) as string[]).map((key, i) => {
                                         const [inst, dir] = key.split('|');
                                         return (
-                                            <div key={i} className="search-result-item" onClick={() => setSelectedInst({ name: inst, dir })}>
+                                            <div key={i} className="search-result-item" onClick={() => {
+                                                setSelectedInst({ name: inst, dir });
+                                                const instStudents = allStudents.filter(isDeparting).filter(s => s.receivingInst === inst && s.originalDir === dir);
+                                                setSelectedMassSendStudents(instStudents.map(s => s.id));
+                                            }}>
                                                 <div className="stud-info">
                                                     <span className="name">{inst}</span>
                                                     <span className="massar">المديرية: {dir} | عدد التلاميذ: {allStudents.filter(isDeparting).filter(s => s.receivingInst === inst && s.originalDir === dir).length}</span>
@@ -1250,6 +1296,20 @@ export default function App() {
                                         <table>
                                             <thead>
                                                 <tr>
+                                                    <th style={{ width: '40px' }}>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={
+                                                                allStudents.filter(isDeparting).filter(s => s.receivingInst === selectedInst.name && s.originalDir === selectedInst.dir).length > 0 && 
+                                                                selectedMassSendStudents.length === allStudents.filter(isDeparting).filter(s => s.receivingInst === selectedInst.name && s.originalDir === selectedInst.dir).length
+                                                            }
+                                                            onChange={(e) => {
+                                                                const allIds = allStudents.filter(isDeparting).filter(s => s.receivingInst === selectedInst.name && s.originalDir === selectedInst.dir).map(s => s.id);
+                                                                if (e.target.checked) setSelectedMassSendStudents(allIds);
+                                                                else setSelectedMassSendStudents([]);
+                                                            }}
+                                                        />
+                                                    </th>
                                                     <th>مسار</th>
                                                     <th>الاسم والنسب</th>
                                                     <th>المستوى</th>
@@ -1257,7 +1317,20 @@ export default function App() {
                                             </thead>
                                             <tbody>
                                                 {allStudents.filter(isDeparting).filter(s => s.receivingInst === selectedInst.name && s.originalDir === selectedInst.dir).map((s, i) => (
-                                                    <tr key={i}>
+                                                    <tr key={i} onClick={() => {
+                                                        if (selectedMassSendStudents.includes(s.id)) {
+                                                            setSelectedMassSendStudents(selectedMassSendStudents.filter(id => id !== s.id));
+                                                        } else {
+                                                            setSelectedMassSendStudents([...selectedMassSendStudents, s.id]);
+                                                        }
+                                                    }} style={{ cursor: 'pointer' }}>
+                                                        <td>
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={selectedMassSendStudents.includes(s.id)} 
+                                                                onChange={() => {}} // handled by tr click
+                                                            />
+                                                        </td>
                                                         <td>{s.studentNum}</td>
                                                         <td>{s.lastName} {s.firstName}</td>
                                                         <td>{s.level}</td>
@@ -1297,7 +1370,11 @@ export default function App() {
                                                 className="btn btn-primary" 
                                                 style={{ width: '100%', fontSize: '0.9em', padding: '8px' }} 
                                                 onClick={async () => {
-                                                    const students = allStudents.filter(isDeparting).filter(s => s.receivingInst === selectedInst.name && s.originalDir === selectedInst.dir);
+                                                    const students = allStudents.filter(isDeparting).filter(s => s.receivingInst === selectedInst.name && s.originalDir === selectedInst.dir && selectedMassSendStudents.includes(s.id));
+                                                    if (students.length === 0) {
+                                                        showToast("المرجو تحديد تلميذ واحد على الأقل", "error");
+                                                        return;
+                                                    }
                                                     try {
                                                         const batch = writeBatch(db);
                                                         students.forEach(s => batch.update(doc(db, "students", s.id), { requestDate1, requestDate2, requestDate3 }));
@@ -1315,7 +1392,11 @@ export default function App() {
                                     </div>
 
                                     <button className="btn btn-warning" style={{ width: '100%' }} onClick={() => {
-                                        const students = allStudents.filter(isDeparting).filter(s => s.receivingInst === selectedInst.name && s.originalDir === selectedInst.dir);
+                                        const students = allStudents.filter(isDeparting).filter(s => s.receivingInst === selectedInst.name && s.originalDir === selectedInst.dir && selectedMassSendStudents.includes(s.id));
+                                        if (students.length === 0) {
+                                            showToast("المرجو تحديد تلميذ واحد على الأقل", "error");
+                                            return;
+                                        }
                                         setModalContent(renderOfficialDoc(
                                             "إرسال الوثائق المدرسية (إرسال جماعي)",
                                             "يشرفني أن أرسل إليكم الوثائق المدرسية للتلاميذ المدرجة أسماؤهم أدناه",
