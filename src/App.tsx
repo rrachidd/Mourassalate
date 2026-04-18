@@ -234,6 +234,17 @@ export default function App() {
                     const ws = wb.Sheets[wb.SheetNames[0]];
                     const json: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
+                    // استخراج المستوى من الخلية C7 (السطر السابع، العمود الثالث - index 6, 2)
+                    let fileLevel = "";
+                    if (json.length >= 7 && json[6] && json[6][2]) {
+                        let val = String(json[6][2]).trim();
+                        let clean = val.replace(/(\s*-\s*\d+\/\d+|\s*عام|\s*مسار دولي.*|\s*خيار.*)/g, '').trim();
+                        if (clean.includes("أولى") && clean.includes("إعدادي")) fileLevel = "السنة الأولى إعدادي";
+                        else if (clean.includes("ثانية") && clean.includes("إعدادي")) fileLevel = "السنة الثانية إعدادي";
+                        else if (clean.includes("ثالثة") && clean.includes("إعدادي")) fileLevel = "السنة الثالثة إعدادي";
+                        else fileLevel = clean;
+                    }
+
                     // تبدأ المعطيات من السطر رقم 10 (Index 9)
                     for (let i = 9; i < json.length; i++) {
                         const row = json[i];
@@ -270,6 +281,7 @@ export default function App() {
                             }
 
                             const extractLevel = (r: any[]) => {
+                                if (fileLevel) return fileLevel; // إعطاء الأولوية للخلية C7
                                 for (let j = 5; j < Math.max(r.length, 15); j++) {
                                     let val = String(r[j] || '').trim();
                                     if (/(أولى|ثانية|ثالثة|رابعة|خامسة|سادسة|إعدادي|ابتدائي|تأهيلي|جذع|بكالوريا|سنة)/i.test(val)) {
@@ -379,6 +391,95 @@ export default function App() {
         } catch (e: any) {
             showToast('خطأ في التصدير: ' + e.message, 'error');
         }
+    };
+
+    const renderInterventionDoc = (students: any[], targetSchool: string, targetProvince: string, dates: string[]) => {
+        return (
+            <div className="official-doc" style={{ fontFamily: 'Arial, sans-serif', fontSize: '15px', color: '#000', lineHeight: '1.6' }}>
+                <div style={{ textAlign: 'center', marginBottom: '15px' }}>
+                    <img 
+                        src={ministryLogo} 
+                        alt="وزارة التربية الوطنية والتعليم الأولي والرياضة" 
+                        style={{ height: '70px', width: 'auto', display: 'inline-block' }}
+                    />
+                </div>
+                
+                <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '15px', marginBottom: '10px' }}>
+                    أكاديمية جهة {academyName.replace(/الأكاديمية الجهوية( للتربية و?\s?التكوين -?)?/g, '').trim()}  /   مديرية عمالة : {provincialName.replace(/المديرية الإقليمية( -)?/g, '').trim()}
+                </div>
+                <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '16px', marginBottom: '10px' }}>
+                    الثانوية الإعدادية {schoolName}
+                </div>
+                
+                <hr style={{ borderTop: '2px solid black', margin: '15px 0' }} />
+
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', marginRight: '50px', marginLeft: '50px', marginBottom: '20px', fontSize: '16px', fontWeight: 'bold' }}>
+                    <div style={{ alignSelf: 'flex-start' }}>من مدير مؤسسة : {schoolName}</div>
+                    <div style={{ alignSelf: 'flex-start' }}>المديرية الإقليمية : عمالة : {provincialName.replace(/المديرية الإقليمية( -)?/g, '').trim()}</div>
+                    
+                    <div style={{ alignSelf: 'center', margin: '20px 0', fontSize: '20px', textDecoration: 'underline' }}>إلــــــــــــــــى</div>
+                    
+                    <div style={{ alignSelf: 'center' }}>السيد المدير الإقليمي لوزارة التربية الوطنية</div>
+                    <div style={{ alignSelf: 'center' }}>المديرية الإقليمية : عمالة : {provincialName.replace(/المديرية الإقليمية( -)?/g, '').trim()}</div>
+                </div>
+
+                <div style={{ marginBottom: '25px', fontSize: '17px', fontWeight: 'bold', textDecoration: 'underline' }}>
+                    الموضـــــــــوع : طلب تدخل بشأن إرسال ملف مدرسي
+                </div>
+
+                <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '17px', marginBottom: '20px' }}>
+                    سلام تام بوجود مولانا الإمام المؤيد بالله
+                </div>
+
+                <div style={{ marginBottom: '15px', fontSize: '16px' }}>
+                    وبعد ، فعلاقة بالموضوع المشار إليه أعلاه ، يشرفني سيدي أن أطلب منكم التدخل بشأن مراسلة الملف المدرسي للتلميذ (ة) :
+                </div>
+
+                <table className="doc-table" style={{ width: '100%', marginBottom: '20px', textAlign: 'center', fontSize: '14px' }}>
+                    <thead>
+                        <tr>
+                            <th style={{ width: '40px' }}>الرقم</th>
+                            <th>النسب</th>
+                            <th>الإسم</th>
+                            <th>رمز مسار</th>
+                            <th>المستوى</th>
+                            <th>المؤسسة الأصلية</th>
+                            <th>المديرية الأصلية</th>
+                            <th>الأكاديمية الأصلية</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {students.map((s, i) => (
+                            <tr key={i}>
+                                <td>{i + 1}</td>
+                                <td>{s.lastName}</td>
+                                <td>{s.firstName}</td>
+                                <td>{s.studentNum}</td>
+                                <td>{s.level || '—'}</td>
+                                <td>{s.originalInst}</td>
+                                <td>{s.originalDir}</td>
+                                <td>{s.originalAcademy}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+
+                {dates && dates.some(d => d) && (
+                    <div style={{ marginTop: '20px', fontSize: '16px' }}>
+                        <p style={{ fontWeight: 'bold', marginBottom: '8px' }}>وأحيطكم علما سيدي أني قمت بمراسلة السيد مدير المؤسسة الأصلية للتلميذ الوافد ب :</p>
+                        <div style={{ paddingRight: '15px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                            {dates[0] ? <div>&#10148; طلب ملف مدرسي رقم 1 بتاريخ {dates[0]}</div> : null}
+                            {dates[1] ? <div>&#10148; طلب ملف مدرسي رقم 2 بتاريخ {dates[1]}</div> : null}
+                            {dates[2] ? <div>&#10148; طلب ملف مدرسي رقم 3 بتاريخ {dates[2]}</div> : null}
+                        </div>
+                    </div>
+                )}
+
+                <div style={{ marginTop: '40px', paddingLeft: '50px', textAlign: 'left', fontWeight: 'bold', fontSize: '18px' }}>
+                    توقيع مدير المؤسسة :
+                </div>
+            </div>
+        );
     };
 
     // Official Document Generator (A4)
@@ -999,15 +1100,10 @@ export default function App() {
                                             return;
                                         }
 
-                                        setModalContent(renderOfficialDoc(
-                                            "طلب تدخل المدير الإقليمي قصد التوصل بملفات التلاميذ",
-                                            "لأجله، يشرفني أن ألتمس منكم التدخل لدى المؤسسة المعنية من أجل موافاتنا بالملفات المدرسية للتلاميذ:",
+                                        setModalContent(renderInterventionDoc(
                                             selectedSts,
                                             selectedInst.name,
                                             selectedInst.dir,
-                                            corrRef || "..../....",
-                                            corrDate,
-                                            "مراسلتنا رقم " + (corrRef || "...") + " بتاريخ " + (corrDate || "..."),
                                             [requestDate1, requestDate2, requestDate3]
                                         ));
                                         setModalOpen(true);
@@ -1052,6 +1148,7 @@ export default function App() {
                                         <tr>
                                             <th>مسار</th>
                                             <th>الاسم والنسب</th>
+                                            <th>المستوى</th>
                                             <th>المؤسسة الأصلية</th>
                                             <th>المراسات</th>
                                             <th>الإجراء</th>
@@ -1069,6 +1166,7 @@ export default function App() {
                                             <tr key={i}>
                                                 <td>{s.studentNum}</td>
                                                 <td>{s.lastName} {s.firstName}</td>
+                                                <td>{s.level}</td>
                                                 <td>{s.originalInst}</td>
                                                 <td>
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.85em' }}>
@@ -1524,6 +1622,7 @@ export default function App() {
                                                         <th>رقم التلميذ</th>
                                                         <th>النسب</th>
                                                         <th>الإسم</th>
+                                                        <th>المستوى</th>
                                                         <th>تاريخ التحويل</th>
                                                         <th>نوع التحويل</th>
                                                         <th>مؤسسة الإستقبال</th>
@@ -1537,6 +1636,7 @@ export default function App() {
                                                         <th>رقم التلميذ</th>
                                                         <th>النسب</th>
                                                         <th>الإسم</th>
+                                                        <th>المستوى</th>
                                                         <th>تاريخ التحويل</th>
                                                         <th>نوع التحويل</th>
                                                         <th>المؤسسة الأصلية</th>
@@ -1565,6 +1665,7 @@ export default function App() {
                                                                 <td>{s.studentNum}</td>
                                                                 <td>{s.lastName}</td>
                                                                 <td>{s.firstName}</td>
+                                                                <td>{s.level}</td>
                                                                 <td>{s.transferDate}</td>
                                                                 <td>{s.transferType}</td>
                                                                 <td>{s.receivingInst}</td>
@@ -1577,6 +1678,7 @@ export default function App() {
                                                                 <td>{s.studentNum}</td>
                                                                 <td>{s.lastName}</td>
                                                                 <td>{s.firstName}</td>
+                                                                <td>{s.level}</td>
                                                                 <td>{s.transferDate}</td>
                                                                 <td>{s.transferType}</td>
                                                                 <td>{s.originalInst}</td>
