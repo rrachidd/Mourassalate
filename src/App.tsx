@@ -54,8 +54,10 @@ export default function App() {
     const [activeView, setActiveView] = useState("dashboard"); // dashboard, settings, mass_request, mass_send
     const [requestSearchTerm, setRequestSearchTerm] = useState("");
     const [sendSearchTerm, setSendSearchTerm] = useState("");
+    const [statsSearchTerm, setStatsSearchTerm] = useState("");
     const [selectedReqStudent, setSelectedReqStudent] = useState<any>(null);
     const [selectedSendStudent, setSelectedSendStudent] = useState<any>(null);
+    const [statsSelectedStudent, setStatsSelectedStudent] = useState<any>(null);
     const [searchInstTerm, setSearchInstTerm] = useState("");
     const [selectedInst, setSelectedInst] = useState<any>(null); // { name: string, dir: string }
     const [selectedInterventionStudents, setSelectedInterventionStudents] = useState<string[]>([]);
@@ -64,6 +66,7 @@ export default function App() {
 
     // Modal State
     const [modalOpen, setModalOpen] = useState(false);
+    const [showExcelInfoModal, setShowExcelInfoModal] = useState(false);
     const [modalContent, setModalContent] = useState<any>(null);
     const [showPrintBtn, setShowPrintBtn] = useState(false);
     const [confirmModal, setConfirmModal] = useState<{ open: boolean, title: string, message: string, onConfirm: () => void } | null>(null);
@@ -630,6 +633,9 @@ export default function App() {
         setSelectedSendStudent(s);
         setSelectedReqStudent(null); // Clear other tab selection
         setSendSearchTerm("");
+        setRequestDate1(s.requestDate1 || "");
+        setRequestDate2(s.requestDate2 || "");
+        setRequestDate3(s.requestDate3 || "");
     };
 
     const generateRequestFileCorr = async () => {
@@ -715,6 +721,12 @@ export default function App() {
         (s.receivingInst || '').toLowerCase().includes(sendSearchTerm.toLowerCase())
     ) : [];
 
+    const statsSearchResults = statsSearchTerm ? allStudents.filter(s =>
+        (s.studentNum || '').toLowerCase().includes(statsSearchTerm.toLowerCase()) ||
+        (s.firstName || '').toLowerCase().includes(statsSearchTerm.toLowerCase()) ||
+        (s.lastName || '').toLowerCase().includes(statsSearchTerm.toLowerCase())
+    ).slice(0, 5) : [];
+
     const smartSelect = (s: any) => {
         if (isArriving(s)) {
             handleRequestSelect(s);
@@ -768,10 +780,17 @@ export default function App() {
                         <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#ff4d4d', cursor: 'pointer', fontSize: '0.85em', marginTop: '5px', textDecoration: 'underline' }}>تسجيل الخروج</button>
                     </div>
                 ) : (
-                    <button className="side-btn" onClick={loginWithGoogle} style={{ background: '#4285f4', color: 'white', marginBottom: '20px' }}>
+                    <button className="side-btn" onClick={loginWithGoogle} style={{ background: '#4285f4', color: 'white', marginBottom: '10px' }}>
                         تسجيل الدخول بـ Google
                     </button>
                 )}
+                
+                <button 
+                    className="side-btn" 
+                    onClick={() => setShowExcelInfoModal(true)} 
+                    style={{ background: '#f2994a', color: 'white', marginBottom: '20px' }}>
+                    ℹ️ دليل الاستخدام وملاحظات
+                </button>
 
                 <button className={`side-btn ${activeView === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveView('dashboard')}>🏠 لوحة التحكم</button>
                 <button className={`side-btn ${activeView === 'mass_request' ? 'active' : ''}`} onClick={() => {
@@ -789,11 +808,11 @@ export default function App() {
                     setSearchInstTerm("");
                     setSelectedInst(null);
                 }}>🛡️ طلب تدخل المدير الإقليمي</button>
-                <button className={`side-btn ${activeView === 'stats' ? 'active' : ''}`} onClick={() => setActiveView('stats')}>📊 إحصائيات المراسلات</button>
-                <button className="side-btn" onClick={openBulkRequestModal}>📥 طلب ملف مدرسي</button>
-                <button className="side-btn" onClick={openBulkSendModal}>📤 إرسال ملف مدرسي</button>
+                <button className={`side-btn ${activeView === 'stats' ? 'active' : ''}`} onClick={() => { setActiveView('stats'); setStatsSearchTerm(""); setStatsSelectedStudent(null); }}>📊 إحصائيات المراسلات</button>
+                <button className={`side-btn ${activeView === 'individual_request' ? 'active' : ''}`} onClick={() => { setActiveView('individual_request'); setRequestSearchTerm(""); setSelectedReqStudent(null); }}>📥 طلب ملف مدرسي</button>
+                <button className={`side-btn ${activeView === 'individual_send' ? 'active' : ''}`} onClick={() => { setActiveView('individual_send'); setSendSearchTerm(""); setSelectedSendStudent(null); }}>📤 إرسال ملف مدرسي</button>
                 <button className={`side-btn ${activeView === 'settings' ? 'active' : ''}`} onClick={() => setActiveView('settings')}>⚙️ الإعدادات</button>
-                <div style={{ marginTop: 'auto', fontSize: '0.8em', opacity: 0.7, textAlign: 'center' }}>إصدار 2.0.0 Pro</div>
+                <div style={{ marginTop: 'auto', fontSize: '0.85em', opacity: 0.8, textAlign: 'center', fontWeight: 'bold', color: 'white' }}>من إنتاج : رشيد الهاريوي</div>
             </aside>
 
             {/* Main Content */}
@@ -1176,6 +1195,67 @@ export default function App() {
                                 </div>
                             </div>
 
+                            <div style={{ marginTop: '30px', padding: '20px', background: '#f8fafc', borderRadius: '15px', border: '1px solid #e2e8f0' }}>
+                                <h3 style={{ marginBottom: '15px', color: '#334155' }}>🔍 البحث السريع عن تلميذ ومراسلاته</h3>
+                                <input 
+                                    type="text" 
+                                    className="search-input-lg" 
+                                    placeholder="البحث برقم مسار أو الاسم..."
+                                    value={statsSearchTerm}
+                                    onChange={(e) => setStatsSearchTerm(e.target.value)}
+                                    style={{ marginBottom: '15px' }}
+                                />
+
+                                {statsSearchTerm && statsSearchResults.length > 0 && !statsSelectedStudent && (
+                                    <div className="search-results-list">
+                                        {statsSearchResults.map((s, i) => (
+                                            <div key={i} className="search-result-item" onClick={() => {
+                                                setStatsSelectedStudent(s);
+                                                setStatsSearchTerm("");
+                                            }}>
+                                                <div className="stud-info">
+                                                    <div className="name" style={{ fontWeight: 'bold' }}>{s.lastName} {s.firstName}</div>
+                                                    <div className="massar" style={{ fontSize: '0.85em', color: '#666' }}>
+                                                        🆔 {s.studentNum} | 🏫 من: {s.originalInst || 'غير محدد'} ➔ إلى: {s.receivingInst || 'غير محدد'}
+                                                    </div>
+                                                </div>
+                                                <div className="select-badge">✓ عرض</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {statsSearchTerm && statsSearchResults.length === 0 && (
+                                    <div className="empty-msg" style={{ padding: '15px' }}>لا يوجد تلميذ بهذا البحث</div>
+                                )}
+
+                                {statsSelectedStudent && (
+                                    <div className="selected-student-info" style={{ marginTop: '15px', background: '#fff', padding: '20px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '1px solid #e2e8f0', paddingBottom: '10px' }}>
+                                            <h4 style={{ margin: 0, color: '#0f172a', fontSize: '1.2em' }}>👤 {statsSelectedStudent.lastName} {statsSelectedStudent.firstName}</h4>
+                                            <button className="btn btn-select" onClick={() => setStatsSelectedStudent(null)}>إغلاق ✕</button>
+                                        </div>
+                                        
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', fontSize: '0.95em' }}>
+                                            <div><strong>🆔 رقم مسار:</strong> {statsSelectedStudent.studentNum}</div>
+                                            <div><strong>📚 المستوى:</strong> {statsSelectedStudent.level || 'غير مبين'}</div>
+                                            <div><strong>🏫 المؤسسة الأصلية:</strong> {statsSelectedStudent.originalInst || 'غير محدد'}</div>
+                                            <div><strong>🎓 مؤسسة الاستقبال:</strong> {statsSelectedStudent.receivingInst || 'غير محدد'}</div>
+                                            <div><strong>🗂️ الحالة:</strong> {isArriving(statsSelectedStudent) ? 'وافد 📥' : isDeparting(statsSelectedStudent) ? 'مغادر 📤' : 'غير معروف'}</div>
+                                        </div>
+
+                                        <div style={{ marginTop: '20px', background: '#f0fdf4', padding: '15px', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+                                            <h5 style={{ margin: '0 0 10px 0', color: '#166534' }}>📅 تاريخ المراسلات ({[statsSelectedStudent.requestDate1, statsSelectedStudent.requestDate2, statsSelectedStudent.requestDate3].filter(Boolean).length} / 3)</h5>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', fontSize: '0.9em' }}>
+                                                <div><strong>مراسلة 1:</strong> {statsSelectedStudent.requestDate1 || <span style={{ color: '#94a3b8' }}>لم تنجز بعد</span>}</div>
+                                                <div><strong>مراسلة 2:</strong> {statsSelectedStudent.requestDate2 || <span style={{ color: '#94a3b8' }}>لم تنجز بعد</span>}</div>
+                                                <div><strong>مراسلة 3:</strong> {statsSelectedStudent.requestDate3 || <span style={{ color: '#94a3b8' }}>لم تنجز بعد</span>}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             <div className="tabs-nav" style={{ marginTop: '30px' }}>
                                 <button className={`tab-btn ${corrType === 'all' ? 'active' : ''}`} onClick={() => setCorrType('all')}>الكل</button>
                                 <button className={`tab-btn ${corrType === 'none' ? 'active' : ''}`} onClick={() => setCorrType('none')}>لم يراسلوا ❌</button>
@@ -1416,6 +1496,190 @@ export default function App() {
                                 </div>
                             )}
                         </div>
+                    ) : activeView === 'individual_request' ? (
+                        <div className="card">
+                            <h2 className="card-title">🔍 طلب ملف مدرسي فردي (وافدون)</h2>
+                            <p style={{ fontSize: '0.85em', color: '#666', marginBottom: '20px' }}>البحث عن تلميذ وافد لتوليد طلب ملفه من مؤسسته الأصلية</p>
+                            
+                            <div className="form-group" style={{ marginBottom: '20px' }}>
+                                <label>البحث عن التلميذ</label>
+                                <input 
+                                    type="text" 
+                                    className="search-input-lg" 
+                                    placeholder="ابحث برقم مسار أو الاسم..."
+                                    value={requestSearchTerm}
+                                    onChange={(e) => setRequestSearchTerm(e.target.value)}
+                                />
+                            </div>
+
+                            {requestSearchTerm && requestSearchResults.length > 0 && !selectedReqStudent && (
+                                <div className="search-results-list" style={{ marginBottom: '20px' }}>
+                                    {requestSearchResults.map((s, i) => (
+                                        <div key={i} className="search-result-item" onClick={() => handleRequestSelect(s)}>
+                                            <div className="stud-info">
+                                                <div className="name" style={{ fontWeight: 'bold', fontSize: '1.05em' }}>{s.lastName} {s.firstName}</div>
+                                                <div className="massar" style={{ fontSize: '0.85em', color: '#666' }}>
+                                                    🆔 {s.studentNum} | 🏫 من: <span style={{ color: '#c2410c' }}>{s.originalInst}</span> ➔ إلى: <span style={{ color: '#15803d' }}>{s.receivingInst}</span>
+                                                </div>
+                                            </div>
+                                            <div className="select-badge">✓ اختر</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {requestSearchTerm && requestSearchResults.length === 0 && (
+                                <div className="empty-msg" style={{ padding: '20px', fontSize: '0.9em' }}>لا توجد نتائج لطلب الملف</div>
+                            )}
+
+                            {selectedReqStudent && (
+                                <div className="selected-student-info" style={{ border: '1px solid #f2994a', background: '#fff9f0', padding: '20px', borderRadius: '15px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                       <h3 style={{ margin: 0, color: '#9a3412' }}>✅ المختار: {selectedReqStudent.lastName} {selectedReqStudent.firstName}</h3>
+                                       <button className="btn btn-primary" style={{ padding: '8px 15px', fontSize: '0.8em' }} onClick={() => setSelectedReqStudent(null)}>تغيير التلميذ</button>
+                                    </div>
+                                    <div className="form-grid" style={{ marginBottom: '20px' }}>
+                                        <div className="form-group">
+                                            <label>رقم المرجع (اختياري)</label>
+                                            <input type="text" placeholder="رقم المرجع" value={requestRef} onChange={(e) => setRequestRef(e.target.value)} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة</label>
+                                            <input type="date" value={requestDate} onChange={(e) => setRequestDate(e.target.value)} />
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', padding: '15px', background: '#fff', borderRadius: '10px', border: '1px solid #ffedd5' }}>
+                                        <div className="form-group" style={{ fontWeight: 'bold', fontSize: '0.9em', color: '#9a3412', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (التي تمت):</div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة رقم 1</label>
+                                            <input type="date" value={requestDate1} onChange={(e) => setRequestDate1(e.target.value)} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة رقم 2</label>
+                                            <input type="date" value={requestDate2} onChange={(e) => setRequestDate2(e.target.value)} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة رقم 3</label>
+                                            <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
+                                        </div>
+                                        <div className="form-group" style={{ marginTop: '10px' }}>
+                                            <button 
+                                                className="btn btn-primary" 
+                                                style={{ width: '100%', fontSize: '0.9em', padding: '8px' }} 
+                                                onClick={async () => {
+                                                    try {
+                                                        await updateDoc(doc(db, "students", selectedReqStudent.id), {
+                                                            requestDate1, requestDate2, requestDate3
+                                                        });
+                                                        showToast("تم تخزين وتحديث التواريخ بنجاح", "success");
+                                                    } catch (error) {
+                                                        console.error(error);
+                                                        showToast("فشل تخزين التواريخ", "error");
+                                                    }
+                                                }}
+                                            >
+                                                💾 تخزين التواريخ في قاعدة البيانات
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <button className="btn btn-warning" style={{ width: '100%' }} onClick={generateRequestFileCorr}>📋 توليد طلب الملف</button>
+                                </div>
+                            )}
+                        </div>
+                    ) : activeView === 'individual_send' ? (
+                        <div className="card">
+                            <h2 className="card-title">📤 إرسال ملف مدرسي فردي (مغادرون)</h2>
+                            <p style={{ fontSize: '0.85em', color: '#64748b', marginBottom: '20px' }}>البحث عن تلميذ مغادر لتوليد إرسالية ملفه للمؤسسة المستقبلة</p>
+                            
+                            <div className="form-group" style={{ marginBottom: '20px' }}>
+                                <label>البحث عن التلميذ</label>
+                                <input 
+                                    type="text" 
+                                    className="search-input-lg" 
+                                    placeholder="ابحث برقم مسار أو الاسم..."
+                                    value={sendSearchTerm}
+                                    onChange={(e) => setSendSearchTerm(e.target.value)}
+                                />
+                            </div>
+
+                            {sendSearchTerm && sendSearchResults.length > 0 && !selectedSendStudent && (
+                                <div className="search-results-list" style={{ marginBottom: '20px' }}>
+                                    {sendSearchResults.map((s, i) => (
+                                        <div key={i} className="search-result-item" onClick={() => handleSendSelect(s)}>
+                                            <div className="stud-info">
+                                                <div className="name" style={{ fontWeight: 'bold', fontSize: '1.05em' }}>{s.lastName} {s.firstName}</div>
+                                                <div className="massar" style={{ fontSize: '0.85em', color: '#666' }}>
+                                                    🆔 {s.studentNum} | 🏫 من: <span style={{ color: '#c2410c' }}>{s.originalInst}</span> ➔ إلى: <span style={{ color: '#15803d' }}>{s.receivingInst}</span>
+                                                </div>
+                                            </div>
+                                            <div className="select-badge">✓ اختر</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {sendSearchTerm && sendSearchResults.length === 0 && (
+                                <div className="empty-msg" style={{ padding: '20px', fontSize: '0.9em' }}>لا توجد نتائج لإرسال الملف</div>
+                            )}
+
+                            {selectedSendStudent && (
+                                <div className="selected-student-info" style={{ border: '1px solid #3b82f6', background: '#eff6ff', padding: '20px', borderRadius: '15px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                       <h3 style={{ margin: 0, color: '#1e3a8a' }}>✅ المختار: {selectedSendStudent.lastName} {selectedSendStudent.firstName}</h3>
+                                       <button className="btn btn-primary" style={{ padding: '8px 15px', fontSize: '0.8em' }} onClick={() => setSelectedSendStudent(null)}>تغيير التلميذ</button>
+                                    </div>
+                                    <div className="form-grid" style={{ marginBottom: '20px' }}>
+                                        <div className="form-group">
+                                            <label>رقم المرجع (اختياري)</label>
+                                            <input type="text" placeholder="رقم المرجع" value={sendRef} onChange={(e) => setSendRef(e.target.value)} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة</label>
+                                            <input type="date" value={sendDate} onChange={(e) => setSendDate(e.target.value)} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>بناءً على</label>
+                                            <input type="text" placeholder="مثال: طلبكم رقم..." value={sendNotes} onChange={(e) => setSendNotes(e.target.value)} />
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', padding: '15px', background: '#fff', borderRadius: '10px', border: '1px solid #bfdbfe' }}>
+                                        <div className="form-group" style={{ fontWeight: 'bold', fontSize: '0.9em', color: '#1e3a8a', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (إن وجدت):</div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة رقم 1</label>
+                                            <input type="date" value={requestDate1} onChange={(e) => setRequestDate1(e.target.value)} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة رقم 2</label>
+                                            <input type="date" value={requestDate2} onChange={(e) => setRequestDate2(e.target.value)} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>تاريخ المراسلة رقم 3</label>
+                                            <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
+                                        </div>
+                                        <div className="form-group" style={{ marginTop: '10px' }}>
+                                            <button 
+                                                className="btn btn-primary" 
+                                                style={{ width: '100%', fontSize: '0.9em', padding: '8px' }} 
+                                                onClick={async () => {
+                                                    try {
+                                                        await updateDoc(doc(db, "students", selectedSendStudent.id), {
+                                                            requestDate1, requestDate2, requestDate3
+                                                        });
+                                                        showToast("تم تخزين وتحديث التواريخ بنجاح", "success");
+                                                    } catch (error) {
+                                                        console.error(error);
+                                                        showToast("فشل تخزين التواريخ", "error");
+                                                    }
+                                                }}
+                                            >
+                                                💾 تخزين التواريخ في قاعدة البيانات
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <button className="btn btn-primary" style={{ width: '100%', marginTop: '15px' }} onClick={generateSendFileCorr}>📤 توليد إرسال ملف</button>
+                                </div>
+                            )}
+                        </div>
                     ) : activeView === 'dashboard' ? (
                         <>
                             {/* Header */}
@@ -1427,15 +1691,6 @@ export default function App() {
                             {/* Section Upload */}
                             <div className="card no-print" id="section-upload">
                                 <h2 className="card-title">📥 استيراد وتصنيف البيانات</h2>
-                                <div className="structure-box" style={{ marginBottom: '20px', background: '#fff9f0', borderRight: '5px solid #f2994a', padding: '15px', borderRadius: '10px' }}>
-                                    <div style={{ fontWeight: 800, color: '#92400e', marginBottom: '10px' }}>📌 ملاحظات هامة حول ملف Excel:</div>
-                                    <ul style={{ listStyle: 'none', paddingRight: '10px', fontSize: '0.95em' }}>
-                                        <li>• يبدأ جلب المعطيات تلقائياً من <strong>السطر رقم 10</strong>.</li>
-                                        <li>• <strong>للوافيـدين:</strong> 6.مؤسسة الاستقبال | 7.المؤسسة الأصلية | 8.المديرية الأصلية | 9.الأكاديمية الأصلية</li>
-                                        <li>• <strong>للمغادرين:</strong> 6.المؤسسة الأصلية | 7.مؤسسة الاستقبال | 8.المديرية المستقبلة | 9.الأكاديمية المستقبلة</li>
-                                        <li>• اختر منطقة الاستيراد المناسبة لتصنيف التلاميذ تلقائياً.</li>
-                                    </ul>
-                                </div>
 
                                 <div className="upload-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                                     {/* Arriving Import */}
@@ -1503,187 +1758,6 @@ export default function App() {
                                 <div className="stat-card">
                                     <div className="stat-num">{allStudents.length}</div>
                                     <div className="stat-label">المجموع 👥</div>
-                                </div>
-                            </div>
-
-                            {/* Dual Search Sections */}
-                            <div className="dual-search-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) minmax(300px, 1fr)', gap: '20px', marginBottom: '30px' }}>
-                                {/* Request Section */}
-                                <div className="card search-section no-print" style={{ borderRight: '5px solid #f2994a' }}>
-                                    <h2 className="card-title">🔍 طلب ملف مدرسي (وافدون)</h2>
-                                    <p style={{ fontSize: '0.85em', color: '#666', marginBottom: '10px' }}>البحث عن تلميذ وافد لتوليد طلب ملفه من مؤسسته الأصلية</p>
-                                    <input 
-                                        type="text" 
-                                        className="search-input-lg" 
-                                        placeholder="ابحث برقم مسار أو الاسم..."
-                                        value={requestSearchTerm}
-                                        onChange={(e) => setRequestSearchTerm(e.target.value)}
-                                    />
-
-                                    {requestSearchTerm && requestSearchResults.length > 0 && !selectedReqStudent && (
-                                        <div className="search-results-list" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                                            {requestSearchResults.map((s, i) => (
-                                                <div key={i} className="search-result-item" onClick={() => handleRequestSelect(s)}>
-                                                    <div className="stud-info">
-                                                        <div className="name" style={{ fontWeight: 'bold', fontSize: '1.05em' }}>{s.lastName} {s.firstName}</div>
-                                                        <div className="massar" style={{ fontSize: '0.85em', color: '#666' }}>
-                                                            🆔 {s.studentNum} | 🏫 من: <span style={{ color: '#c2410c' }}>{s.originalInst}</span> ➔ إلى: <span style={{ color: '#15803d' }}>{s.receivingInst}</span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="select-badge">✓ اختر</div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {requestSearchTerm && requestSearchResults.length === 0 && (
-                                        <div className="empty-msg" style={{ padding: '10px', fontSize: '0.9em' }}>لا توجد نتائج لطلب الملف</div>
-                                    )}
-
-                                    {selectedReqStudent && (
-                                        <div className="selected-student-info" style={{ border: '1px solid #f2994a', background: '#fff9f0', padding: '15px', borderRadius: '8px' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                                               <h4 style={{ margin: 0 }}>✅ المختار: {selectedReqStudent.lastName} {selectedReqStudent.firstName}</h4>
-                                               <button onClick={() => setSelectedReqStudent(null)} className="btn-select" style={{ color: '#666', fontSize: '0.8em' }}>تغيير</button>
-                                            </div>
-                                            <div className="form-grid" style={{ marginTop: '10px' }}>
-                                                <div className="form-group">
-                                                    <label>رقم المرجع</label>
-                                                    <input type="text" placeholder="رقم المرجع" value={requestRef} onChange={(e) => setRequestRef(e.target.value)} />
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>تاريخ المراسلة</label>
-                                                    <input type="date" value={requestDate} onChange={(e) => setRequestDate(e.target.value)} />
-                                                </div>
-                                            </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px', padding: '10px', background: '#fff', borderRadius: '5px', border: '1px solid #ffedd5' }}>
-                                                <div className="form-group" style={{ fontWeight: 'bold', fontSize: '0.8em', color: '#9a3412', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (التي تمت):</div>
-                                                <div className="form-group">
-                                                    <label>تاريخ المراسلة رقم 1</label>
-                                                    <input type="date" value={requestDate1} onChange={(e) => setRequestDate1(e.target.value)} />
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>تاريخ المراسلة رقم 2</label>
-                                                    <input type="date" value={requestDate2} onChange={(e) => setRequestDate2(e.target.value)} />
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>تاريخ المراسلة رقم 3</label>
-                                                    <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
-                                                </div>
-                                                <div className="form-group" style={{ marginTop: '10px' }}>
-                                                    <button 
-                                                        className="btn btn-primary" 
-                                                        style={{ width: '100%', fontSize: '0.9em', padding: '8px' }} 
-                                                        onClick={async () => {
-                                                            try {
-                                                                await updateDoc(doc(db, "students", selectedReqStudent.id), {
-                                                                    requestDate1, requestDate2, requestDate3
-                                                                });
-                                                                showToast("تم تخزين وتحديث التواريخ بنجاح", "success");
-                                                            } catch (error) {
-                                                                console.error(error);
-                                                                showToast("فشل تخزين التواريخ", "error");
-                                                            }
-                                                        }}
-                                                    >
-                                                        💾 تخزين التواريخ في قاعدة البيانات
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <button className="btn btn-warning" style={{ width: '100%', marginTop: '15px' }} onClick={generateRequestFileCorr}>📋 توليد طلب الملف</button>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Send Section */}
-                                <div className="card search-section no-print" style={{ borderRight: '5px solid #3b82f6' }}>
-                                    <h2 className="card-title">📤 إرسال ملف مدرسي (مغادرون)</h2>
-                                    <p style={{ fontSize: '0.85em', color: '#666', marginBottom: '10px' }}>البحث عن تلميذ مغادر لتوليد إرسالية ملفه للمؤسسة المستقبلة</p>
-                                    <input 
-                                        type="text" 
-                                        className="search-input-lg" 
-                                        placeholder="ابحث برقم مسار أو الاسم..."
-                                        value={sendSearchTerm}
-                                        onChange={(e) => setSendSearchTerm(e.target.value)}
-                                    />
-
-                                    {sendSearchTerm && sendSearchResults.length > 0 && !selectedSendStudent && (
-                                        <div className="search-results-list" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                                            {sendSearchResults.map((s, i) => (
-                                                <div key={i} className="search-result-item" onClick={() => handleSendSelect(s)}>
-                                                    <div className="stud-info">
-                                                        <div className="name" style={{ fontWeight: 'bold', fontSize: '1.05em' }}>{s.lastName} {s.firstName}</div>
-                                                        <div className="massar" style={{ fontSize: '0.85em', color: '#666' }}>
-                                                            🆔 {s.studentNum} | 🏫 من: <span style={{ color: '#c2410c' }}>{s.originalInst}</span> ➔ إلى: <span style={{ color: '#15803d' }}>{s.receivingInst}</span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="select-badge">✓ اختر</div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {sendSearchTerm && sendSearchResults.length === 0 && (
-                                        <div className="empty-msg" style={{ padding: '10px', fontSize: '0.9em' }}>لا توجد نتائج لإرسال الملف</div>
-                                    )}
-
-                                    {selectedSendStudent && (
-                                        <div className="selected-student-info" style={{ border: '1px solid #3b82f6', background: '#eff6ff', padding: '15px', borderRadius: '8px' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                                               <h4 style={{ margin: 0 }}>✅ المختار: {selectedSendStudent.lastName} {selectedSendStudent.firstName}</h4>
-                                               <button onClick={() => setSelectedSendStudent(null)} className="btn-select" style={{ color: '#666', fontSize: '0.8em' }}>تغيير</button>
-                                            </div>
-                                            <div className="form-grid" style={{ marginTop: '10px' }}>
-                                                <div className="form-group">
-                                                    <label>رقم المرجع</label>
-                                                    <input type="text" placeholder="رقم المرجع" value={sendRef} onChange={(e) => setSendRef(e.target.value)} />
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>تاريخ المراسلة</label>
-                                                    <input type="date" value={sendDate} onChange={(e) => setSendDate(e.target.value)} />
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>بناءً على</label>
-                                                    <input type="text" placeholder="مثال: طلبكم رقم..." value={sendNotes} onChange={(e) => setSendNotes(e.target.value)} />
-                                                </div>
-                                            </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px', padding: '10px', background: '#fff', borderRadius: '5px', border: '1px solid #bfdbfe' }}>
-                                                <div className="form-group" style={{ fontWeight: 'bold', fontSize: '0.8em', color: '#1e3a8a', marginBottom: '5px' }}>تذكير بالمراسلات السابقة (إن وجدت):</div>
-                                                <div className="form-group">
-                                                    <label>تاريخ المراسلة رقم 1</label>
-                                                    <input type="date" value={requestDate1} onChange={(e) => setRequestDate1(e.target.value)} />
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>تاريخ المراسلة رقم 2</label>
-                                                    <input type="date" value={requestDate2} onChange={(e) => setRequestDate2(e.target.value)} />
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>تاريخ المراسلة رقم 3</label>
-                                                    <input type="date" value={requestDate3} onChange={(e) => setRequestDate3(e.target.value)} />
-                                                </div>
-                                                <div className="form-group" style={{ marginTop: '10px' }}>
-                                                    <button 
-                                                        className="btn btn-primary" 
-                                                        style={{ width: '100%', fontSize: '0.9em', padding: '8px' }} 
-                                                        onClick={async () => {
-                                                            try {
-                                                                await updateDoc(doc(db, "students", selectedSendStudent.id), {
-                                                                    requestDate1, requestDate2, requestDate3
-                                                                });
-                                                                showToast("تم تخزين وتحديث التواريخ بنجاح", "success");
-                                                            } catch (error) {
-                                                                console.error(error);
-                                                                showToast("فشل تخزين التواريخ", "error");
-                                                            }
-                                                        }}
-                                                    >
-                                                        💾 تخزين التواريخ في قاعدة البيانات
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <button className="btn btn-primary" style={{ width: '100%', marginTop: '15px' }} onClick={generateSendFileCorr}>📤 توليد إرسال ملف</button>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
 
@@ -1820,6 +1894,35 @@ export default function App() {
                     )}
                 </div>
             </main>
+
+            {/* Modal for App Guide & Excel Notes */}
+            {showExcelInfoModal && (
+                <div className="modal-overlay" style={{ display: 'block' }} onClick={() => setShowExcelInfoModal(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', margin: '5% auto', padding: '30px', borderRadius: '15px', background: 'white', maxHeight: '85vh', overflowY: 'auto' }}>
+                        
+                        <h2 style={{ color: '#2563eb', marginBottom: '15px', borderBottom: '2px solid #2563eb', paddingBottom: '10px' }}>💡 طريقة استعمال التطبيق</h2>
+                        <ol style={{ paddingRight: '20px', fontSize: '1.05em', lineHeight: '1.8', color: '#334155', marginBottom: '30px' }}>
+                            <li style={{ marginBottom: '10px' }}><strong>الإعدادات أولاً:</strong> قم بالدخول إلى لوحة (الإعدادات ⚙️) وتعبئة بيانات مؤسستك (الاسم، الأكاديمية، المديرية...) لطباعتها في رأس المراسلات.</li>
+                            <li style={{ marginBottom: '10px' }}><strong>استيراد البيانات:</strong> من (لوحة التحكم 🏠)، قم برفع ملف Excel الخاص بالتلاميذ لجلبه وتصنيفه تلقائياً، مع مراعاة الملاحظات أدناه.</li>
+                            <li style={{ marginBottom: '10px' }}><strong>العمليات الجماعية:</strong> استخدم "طلب ملفات جماعية" أو "إرسال ملفات جماعية" لإنشاء وطباعة مراسلات دفعة واحدة مجمعة حسب المؤسسة.</li>
+                            <li style={{ marginBottom: '10px' }}><strong>العمليات الفردية:</strong> من قوائم الأزرار "طلب ملف مدرسي" أو "إرسال ملف مدرسي"، يمكنك البحث عن تلميذ محدد وتوليد وثيقة مخصصة له فقط.</li>
+                            <li><strong>الطباعة والحفظ:</strong> عند توليد أي وثيقة، ستظهر نافذة تتيح لك طباعتها مباشرة (A4) أو حفظها كملف PDF.</li>
+                        </ol>
+
+                        <h2 style={{ color: '#92400e', marginBottom: '15px', borderBottom: '2px solid #f2994a', paddingBottom: '10px', marginTop: '20px' }}>📌 ملاحظات هامة حول ملف Excel</h2>
+                        <ul style={{ listStyle: 'none', padding: '0', fontSize: '1.05em', lineHeight: '1.8', color: '#78350f' }}>
+                            <li style={{ marginBottom: '10px' }}>• يبدأ جلب المعطيات تلقائياً من <strong>السطر رقم 10</strong> في ملف مسار.</li>
+                            <li style={{ marginBottom: '10px' }}>• <strong>للوافيـدين يجب أن يكون الترتيب:</strong> 6.مؤسسة الاستقبال | 7.المؤسسة الأصلية | 8.المديرية الأصلية | 9.الأكاديمية الأصلية.</li>
+                            <li style={{ marginBottom: '10px' }}>• <strong>للمغادرين يجب أن يكون الترتيب:</strong> 6.المؤسسة الأصلية | 7.مؤسسة الاستقبال | 8.المديرية المستقبلة | 9.الأكاديمية المستقبلة.</li>
+                            <li>• اختر منطقة الاستيراد المناسبة لتصنيف التلاميذ بطريقة صحيحة (وافدون أو مغادرون).</li>
+                        </ul>
+
+                        <div style={{ textAlign: 'center', marginTop: '30px' }}>
+                            <button className="btn btn-primary" onClick={() => setShowExcelInfoModal(false)} style={{ fontSize: '1.1em', padding: '10px 30px' }}>حسناً، فهمت</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal for Official Documents */}
             <div className="modal-overlay" style={{ display: modalOpen ? 'block' : 'none' }} onClick={() => setModalOpen(false)}>
